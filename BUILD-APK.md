@@ -5,22 +5,55 @@ TWA = Trusted Web Activity — APK ที่เปิดเว็บของเ
 
 ---
 
-## สถานะ toolchain ในเครื่อง (ตรวจจริงด้วย `bubblewrap doctor` แล้ว)
+## สถานะ toolchain — ตั้งค่าเสร็จแล้ว ผ่าน build จริงแล้ว
 
-| ต้องมี | สถานะ |
+ทั้งหมดอยู่ที่ `C:\Users\user\.bubblewrap\` ไม่ไปยุ่งกับ Android Studio เดิม
+
+| | path |
 |---|---|
-| Node.js | ✅ v24.18.1 |
-| **JDK 17 เป๊ะ ๆ** | ❌ ไม่มี — เครื่องมี JDK 26 กับ 21 (JBR) เท่านั้น |
-| **Android SDK + cmdline-tools** | ❌ SDK มี แต่ไม่มี `cmdline-tools/` |
+| JDK 17.0.11+9 **x64** | `.bubblewrap\jdk-x64\jdk-17.0.11+9` |
+| Android SDK | `.bubblewrap\android_sdk` |
+| config | `.bubblewrap\config.json` |
 
-> Bubblewrap เช็คไฟล์ `release` ของ JDK ว่าต้องขึ้นต้นด้วย `JAVA_VERSION="17.0` เท่านั้น
-> JDK 21 (JBR ของ Android Studio) และ JDK 26 **ถูกปฏิเสธทั้งคู่**
-> และมันเช็ค `androidSdkPath` ว่าต้องมีโฟลเดอร์ `bin/` หรือ `tools/` อยู่ข้างใน
-> ซึ่ง SDK ของ Android Studio ไม่มี (มัน layout คนละแบบ)
+ยืนยันแล้ว: `gradlew assembleDebug` → **BUILD SUCCESSFUL**, APK 5.4 MB
+package `app.signbridge.twa`, launchUrl `https://maxham5649.github.io/signbridge/`
 
-**สถานะ:** ติดตั้งเรียบร้อยแล้วที่ `C:\Users\user\.bubblewrap\`
-(JDK `17.0.11+9` จาก Adoptium + cmdline-tools จาก dl.google.com — ไม่ไปยุ่งกับ Android Studio เดิม)
-`bubblewrap doctor` ผ่านแล้ว: *"Your jdkpath and androidSdkPath are valid."*
+### ⚠️ 3 กับดักที่เจอตอน setup — ถ้าต้องตั้งเครื่องใหม่ต้องเจอซ้ำ
+
+**1. Bubblewrap ลง JDK 32-bit บน Windows เสมอ** ← ตัวนี้เสียเวลาที่สุด
+
+`JdkInstaller.js` มี Windows แค่ตัวเลือกเดียวคือ `OpenJDK17U-jdk_x86-32_windows`
+JVM 32-bit เพดาน heap ~1.5 GB ตายตัว → `:app:mergeExtDexDebug` ตายด้วย
+`OutOfMemoryError` และเพิ่ม `-Xmx` ไม่ช่วยเลย (ขึ้น `Could not reserve enough
+space for object heap` ตั้งแต่ยังไม่เริ่ม build)
+
+เช็คด้วย: `grep OS_ARCH <jdkPath>/release` — ต้องได้ `x86_64` ไม่ใช่ `x86`
+
+แก้: โหลด x64 เวอร์ชันเดียวกันจาก Adoptium แล้วชี้ `config.json` ไปที่มัน
+
+```bash
+cd /c/Users/user/.bubblewrap && curl -sSL -o jdk-x64.zip "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.11%2B9/OpenJDK17U-jdk_x64_windows_hotspot_17.0.11_9.zip"
+```
+
+แตกไฟล์ด้วย PowerShell (GNU tar ใน git-bash อ่าน zip ไม่ได้):
+
+```bash
+powershell -c "Expand-Archive -Path C:\Users\user\.bubblewrap\jdk-x64.zip -DestinationPath C:\Users\user\.bubblewrap\jdk-x64 -Force"
+```
+
+**2. SDK ที่ Bubblewrap โหลดมาไม่มี license**
+
+Gradle ต้องโหลด `build-tools;35.0.0` + `platforms;android-36` เพิ่ม แต่ไม่ยอมถ้าไม่มีไฟล์ license
+แก้โดยก๊อป license ที่ยอมรับไว้แล้วจาก Android Studio SDK:
+
+```bash
+mkdir -p /c/Users/user/.bubblewrap/android_sdk/licenses && cp /c/Users/user/AppData/Local/Android/Sdk/licenses/* /c/Users/user/.bubblewrap/android_sdk/licenses/
+```
+
+**3. `-Xmx1536m` ที่ Bubblewrap ใส่มาน้อยไป**
+
+`twa/gradle.properties` ถูกแก้เป็น `-Xmx2g` แล้ว
+**ถ้ารัน `bubblewrap init` หรือ `update` ใหม่ ไฟล์นี้จะถูกเขียนทับ ต้องแก้ซ้ำ**
 
 ---
 
@@ -85,32 +118,42 @@ npx --yes @bubblewrap/cli@latest updateConfig --jdkPath "C:\Users\user\.bubblewr
 
 ---
 
-## ขั้นตอนที่ 3 — สร้างโปรเจกต์ TWA แล้ว build APK
+## ขั้นตอนที่ 3 — โปรเจกต์ TWA (สร้างไว้ให้แล้ว)
 
-แทน `<URL>` ด้วย URL จริงจากขั้นตอนที่ 1
+โปรเจกต์ Android อยู่ที่ `C:\Users\user\Desktop\App\twa\` แล้ว
+ตั้งค่าไว้ตามนี้ (แก้ได้ที่ `twa/twa-manifest.json`):
+
+| | |
+|---|---|
+| Package ID | `app.signbridge.twa` |
+| Host | `maxham5649.github.io` |
+| Launch URL | `/signbridge/` |
+| Launcher name | `SignBridge` |
+| Theme color | `#1C5DFA` |
+| minSdk / targetSdk | 21 / 35 |
+
+โฟลเดอร์ `twa/` อยู่ใน `.gitignore` — สร้างใหม่ได้เสมอ และ **ห้าม commit keystore**
+
+---
+
+## ขั้นตอนที่ 3.5 — build APK (ต้องรันเอง เพราะต้องตั้งรหัส keystore)
 
 ```bash
-mkdir -p /c/Users/user/Desktop/App/twa && cd /c/Users/user/Desktop/App/twa && npx --yes @bubblewrap/cli init --manifest="<URL>/manifest.webmanifest"
+cd /c/Users/user/Desktop/App/twa && npx --yes @bubblewrap/cli@latest build
 ```
 
-Bubblewrap จะถามทีละข้อ — ค่าที่ควรตอบ:
+ครั้งแรกมันจะถามสร้าง keystore ใหม่ ตอบตามนี้:
 
 | คำถาม | ตอบ |
 |---|---|
-| Application name | `SignBridge` |
-| Short name | `SignBridge` |
-| Application ID (package) | `app.signbridge.twa` |
-| Display mode | `standalone` |
-| Status bar color | `#1C5DFA` |
-| Include support for Play Billing | `No` |
-| Request geolocation permission | `No` |
-| **Key store / password** | ตั้งรหัสผ่านเอง แล้ว **จดเก็บไว้ให้ดี** — ถ้าหายจะอัปเดตแอพเดิมไม่ได้อีกเลย |
+| `Do you want to create one now?` (signing key) | `Y` |
+| First and Last names / Organization / Country | ใส่อะไรก็ได้ (ไม่มีผลกับการทำงาน) |
+| **Password for the Key Store** | ตั้งเอง |
+| **Password for the Key** | ตั้งเอง (ใช้อันเดียวกันได้) |
 
-จากนั้น build:
-
-```bash
-cd /c/Users/user/Desktop/App/twa && npx --yes @bubblewrap/cli build
-```
+> 🔑 **จดรหัสทั้งสองไว้ให้ดี และเก็บไฟล์ `twa/android.keystore` ไว้**
+> ถ้าหาย = อัปเดตแอพตัวเดิมไม่ได้อีกเลย ต้องเปลี่ยน package ID เป็นแอพใหม่
+> อย่าเก็บลง git (`.gitignore` กันไว้แล้ว) — ก๊อปไปเก็บที่อื่นด้วย
 
 ได้ไฟล์:
 - `app-release-signed.apk` ← **ตัวนี้คือ APK ที่เอาไปลงมือถือได้เลย**
@@ -122,21 +165,29 @@ cd /c/Users/user/Desktop/App/twa && npx --yes @bubblewrap/cli build
 
 ถ้าข้ามขั้นนี้ แอพจะเปิดได้แต่โผล่แถบ URL ของ Chrome ด้านบน
 
-Bubblewrap สร้างไฟล์ `twa/assetlinks.json` ให้แล้ว — เอาไปวางบนเว็บที่ path นี้:
-
-```
-<URL>/.well-known/assetlinks.json
-```
-
-คือสร้างโฟลเดอร์ `.well-known/` ในโปรเจกต์ แล้วก๊อป `assetlinks.json` เข้าไป → push ใหม่
-
-ถ้าหาไฟล์ไม่เจอ สร้าง fingerprint เองได้ด้วย:
+`build` จะสร้าง `twa/assetlinks.json` ให้ (ถ้าไม่เจอ สร้างเองได้ด้วย):
 
 ```bash
-cd /c/Users/user/Desktop/App/twa && npx --yes @bubblewrap/cli fingerprint generateAssetLinks
+cd /c/Users/user/Desktop/App/twa && npx --yes @bubblewrap/cli@latest fingerprint generateAssetLinks
 ```
 
-ตรวจว่าใช้ได้จริง: เปิด `<URL>/.well-known/assetlinks.json` ในเบราว์เซอร์ ต้องเห็น JSON (ไม่ใช่ 404)
+ไฟล์นั้นต้องไปโผล่ที่ URL นี้:
+
+```
+https://maxham5649.github.io/signbridge/.well-known/assetlinks.json
+```
+
+**บอกผมตอน build เสร็จ ผมก๊อปเข้า `.well-known/` + commit + push ให้** หรือทำเองก็ได้:
+
+```bash
+mkdir -p /c/Users/user/Desktop/App/.well-known && cp /c/Users/user/Desktop/App/twa/assetlinks.json /c/Users/user/Desktop/App/.well-known/
+```
+
+ตรวจว่าใช้ได้จริง: เปิด URL ข้างบนในเบราว์เซอร์ ต้องเห็น JSON (ไม่ใช่ 404)
+GitHub Pages ใช้เวลา build ~1 นาทีหลัง push
+
+> ไฟล์นี้มีแค่ SHA-256 fingerprint ของ certificate — **ไม่ใช่ความลับ** เอาขึ้น public ได้ปกติ
+> (ต่างจาก `android.keystore` ที่ห้ามหลุด)
 
 ---
 
@@ -147,6 +198,8 @@ cd /c/Users/user/Desktop/App/twa && npx --yes @bubblewrap/cli fingerprint genera
 ```bash
 "/c/Users/user/AppData/Local/Android/Sdk/platform-tools/adb.exe" install -r /c/Users/user/Desktop/App/twa/app-release-signed.apk
 ```
+
+(`adb` ไม่ได้อยู่บน PATH ต้องเรียกด้วย path เต็มแบบข้างบน)
 
 หรือส่งไฟล์ `.apk` เข้ามือถือแล้วกดติดตั้ง (ต้องเปิด "ติดตั้งจากแหล่งที่ไม่รู้จัก")
 
