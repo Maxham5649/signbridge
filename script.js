@@ -17,7 +17,7 @@
    TWA ดึงหน้าเว็บสด ไม่ได้ฝังโค้ดไว้ในตัว APK เวลาไล่บั๊กจึงต้องมีอะไร
    ยืนยันได้ว่าเครื่องนั้นได้ของใหม่แล้วจริง ไม่ใช่ค้างของเก่าอยู่
    *** แก้เลขนี้ทุกครั้งที่ push โค้ดขึ้น production *** */
-const APP_BUILD = 'b8';
+const APP_BUILD = 'b9';
 
 const $ = (id) => document.getElementById(id);
 
@@ -141,11 +141,66 @@ let voskFallbackPending = false; // true ระหว่างกำลังส
 
    จึงต้องดูจาก "ไม่มีผลลัพธ์" แทนที่จะรอ error code */
 let silentAudio = false; // true = เข้าห้องแบบไม่ให้ Jitsi จับไมค์ (ดู startSilent ใน joinRoom)
+/* Web Speech หยุดเองเป็นระยะ (ครบรอบ/เงียบนาน) แล้วต้อง start() ใหม่เสมอ
+   ปัญหาคือ start() ใน onend มักโยน InvalidStateError เพราะตัวเดิมยังปิดไม่สนิท
+   ของเดิม catch แล้วทิ้งเฉย ๆ ซึ่งเท่ากับจบเลย — onend รอบถัดไปไม่มีทางเกิด
+   เพราะ recognizer ไม่เคยเริ่ม อาการคือใช้ได้พักนึงแล้วเงียบไปทั้งสาย
+   จึงต้องมีทั้งการนัดลองใหม่ (มี backoff) และ heartbeat คอยปลุกซ้ำ */
+let recognitionRunning = false;
+let restartTimer = null;
+let restartDelay = 300;
+let keepAliveTimer = null;
+const RESTART_DELAY_MIN = 300;
+const RESTART_DELAY_MAX = 3000;
+const KEEPALIVE_INTERVAL_MS = 4000;
+
 let sttSawResult = false;      // เคยได้ผล (รวม interim) จาก Web Speech รอบนี้ไหม
 let webSpeechSilentRestarts = 0;
 let sttWatchdog = null;
 const WEBSPEECH_PROBATION_MS = 9000;      // เปิดฟังแล้วเงียบสนิทเกินนี้ = ไมค์ถูกยึด
 const WEBSPEECH_MAX_SILENT_RESTARTS = 3;  // onend เด้งซ้ำโดยไม่มีผลกี่ครั้งถึงจะยอมแพ้
+
+/* ลอง start() ให้สำเร็จจริง ๆ ไม่ใช่ลองครั้งเดียวแล้วปล่อย */
+function safeStartRecognition() {
+  restartTimer = null;
+  if (!recognitionWanted || !inCall) return;
+  if (sttEngine === 'vosk' || voskFallbackPending) return;
+  if (recognitionRunning) return;
+  if (!recognition) recognition = initSpeechRecognition();
+  if (!recognition) return;
+  try {
+    recognition.start();
+    restartDelay = RESTART_DELAY_MIN; // สำเร็จแล้ว รีเซ็ต backoff
+  } catch (err) {
+    // InvalidStateError = ตัวเดิมยังปิดไม่สนิท รอแล้วลองใหม่ ห้ามปล่อยผ่าน
+    restartDelay = Math.min(restartDelay * 2, RESTART_DELAY_MAX);
+    scheduleRecognitionRestart(restartDelay);
+  }
+}
+
+function scheduleRecognitionRestart(delay = restartDelay) {
+  if (restartTimer) return;
+  restartTimer = setTimeout(safeStartRecognition, delay);
+}
+
+/* heartbeat: ถ้าควรฟังอยู่แต่ recognizer ไม่ได้ทำงาน ให้ปลุก
+   กันเคสที่ onend ไม่ยิง หรือ start() พลาดจนหลุดลูปนัดใหม่ */
+function startKeepAlive() {
+  if (keepAliveTimer) return;
+  keepAliveTimer = setInterval(() => {
+    if (!recognitionWanted || !inCall) return;
+    if (sttEngine === 'vosk' || voskFallbackPending) return;
+    if (recognitionRunning || restartTimer) return;
+    scheduleRecognitionRestart(RESTART_DELAY_MIN);
+  }, KEEPALIVE_INTERVAL_MS);
+}
+
+function stopKeepAlive() {
+  clearInterval(keepAliveTimer);
+  keepAliveTimer = null;
+  clearTimeout(restartTimer);
+  restartTimer = null;
+}
 
 function armSttWatchdog() {
   clearTimeout(sttWatchdog);
@@ -553,18 +608,20 @@ function initSpeechRecognition() {
       // เหมือนกัน ปล่อยให้ onend เป็นคนนับรอบและตัดสินใจ
       console.debug('speech recognition:', event.error);
     } else {
-      // เคสอื่น ๆ (เช่น audio-capture — ไมค์ชนกับ WebRTC ของ Jitsi บนมือถือ
-      // Android ที่เจอจริง) — สลับไปใช้ Vosk (รันในเบราว์เซอร์เอง ไม่ผ่าน
-      // service ของ Google ที่โดนบล็อก) แทนอัตโนมัติ
+      // network / audio-capture ฯลฯ — พวกนี้หายเองได้ ให้ลอง start ใหม่ต่อไป
+      // ห้ามลากไปโหลด Vosk เองเหมือนเดิม (84MB แล้ว init เป็นนาที) ปุ่มให้
+      // ผู้ใช้กดเองอยู่ในแถบสถานะแล้ว
       console.warn('speech recognition error:', event.error);
       if (recognitionWanted && inCall && sttEngine !== 'vosk' && !voskFallbackPending) {
-        toast(`Web Speech ใช้ไม่ได้ (${event.error}) กำลังสลับไปใช้ระบบสำรอง...`, 'warn', 5000);
-        startListeningVosk();
+        scheduleRecognitionRestart(1000);
       }
     }
   };
 
+  r.onstart = () => { recognitionRunning = true; };
+
   r.onend = () => {
+    recognitionRunning = false;
     els.signInterim.textContent = '';
     if (sttEngine === 'vosk' || voskFallbackPending) return; // กำลัง/สลับไป Vosk แล้ว ไม่ต้อง restart Web Speech
     if (!recognitionWanted || !inCall) {
@@ -574,7 +631,7 @@ function initSpeechRecognition() {
     }
 
     // onend ที่เด้งกลับมาโดยยังไม่เคยได้ผลเลย = อาการไมค์ถูกยึด
-    // ปล่อยให้ start() ใหม่เรื่อย ๆ จะวนเงียบตลอดสายแบบที่เจอบนมือถือ
+    // แต่ถ้าเคยได้ผลแล้ว การจบรอบเป็นเรื่องปกติของ Web Speech ต้อง start ใหม่
     if (!sttSawResult) {
       webSpeechSilentRestarts += 1;
       if (webSpeechSilentRestarts >= WEBSPEECH_MAX_SILENT_RESTARTS) {
@@ -585,7 +642,7 @@ function initSpeechRecognition() {
         return;
       }
     }
-    try { r.start(); } catch (_) { /* ยังไม่หยุดสนิท ข้ามรอบนี้ */ }
+    scheduleRecognitionRestart();
   };
 
   return r;
@@ -599,19 +656,20 @@ function startListening() {
   recognitionWanted = true;
   sttSawResult = false;
   webSpeechSilentRestarts = 0;
+  restartDelay = RESTART_DELAY_MIN;
+  sttEngine = 'webspeech';
+  setSttBadge('webspeech');
+  armSttWatchdog();
+  startKeepAlive(); // ปลุกให้เองถ้าหลุดไประหว่างสาย
   try {
     recognition.start();
-    sttEngine = 'webspeech';
-    setSttBadge('webspeech');
-    armSttWatchdog();
   } catch (err) {
     // InvalidStateError = กำลังทำงานอยู่แล้ว เป็นเคสปกติ เงียบได้
-    // อย่างอื่น (เช่นมือถือบล็อกเพราะไม่ได้เรียกจาก user gesture ตรง ๆ)
-    // ต้องเห็น ไม่งั้นจะดูเหมือน "ไม่มีอะไรเกิดขึ้นเลย" แบบเงียบสนิท
     if (err && err.name !== 'InvalidStateError') {
       console.error('recognition.start() failed:', err);
       toast(`เริ่มถอดเสียงพูดไม่สำเร็จ (${err.name || err}) ใช้ช่องพิมพ์แทนได้`, 'warn', 6000);
     }
+    scheduleRecognitionRestart(); // ล้มรอบนี้ก็ยังต้องลองใหม่
   }
 }
 
@@ -619,6 +677,7 @@ function stopListening() {
   recognitionWanted = false;
   voskFallbackPending = false;
   disarmSttWatchdog();
+  stopKeepAlive();
   setSttBadge(null);
   setSttStatus(null);
   els.signInterim.textContent = '';
