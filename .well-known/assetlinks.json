@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.signbridge.twa",
+      "sha256_cert_fingerprints": ["7E:BB:57:F6:BD:1B:3B:6E:BD:04:7C:B0:12:C3:C1:F5:4F:AB:DA:47:CB:A2:AC:F1:5A:ED:28:56:BA:27:F5:86"]
+    }
+  }
+]
