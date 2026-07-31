@@ -177,6 +177,14 @@ button { font-family: inherit; }
   color: var(--text-muted);
 }
 
+.join-hint-link {
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+}
+.join-hint-link:hover { color: var(--primary-dark); }
+
 @media (max-width: 480px) {
   .join-row { flex-direction: column; }
   /* .join-row input[type="text"] ตั้ง flex: 1 1 260px ไว้สำหรับ layout
