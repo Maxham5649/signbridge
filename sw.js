@@ -12,7 +12,7 @@
      ตอน dev ที่ยังมี signs/1.mp4 อยู่ในเครื่อง
    ========================================================== */
 
-const VERSION = 'signbridge-v9';
+const VERSION = 'signbridge-v10';
 const SHELL_CACHE = `${VERSION}-shell`;
 const MEDIA_CACHE = `${VERSION}-media`;
 

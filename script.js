@@ -17,7 +17,7 @@
    TWA ดึงหน้าเว็บสด ไม่ได้ฝังโค้ดไว้ในตัว APK เวลาไล่บั๊กจึงต้องมีอะไร
    ยืนยันได้ว่าเครื่องนั้นได้ของใหม่แล้วจริง ไม่ใช่ค้างของเก่าอยู่
    *** แก้เลขนี้ทุกครั้งที่ push โค้ดขึ้น production *** */
-const APP_BUILD = 'b9';
+const APP_BUILD = 'b10';
 
 const $ = (id) => document.getElementById(id);
 
@@ -155,10 +155,12 @@ const RESTART_DELAY_MAX = 3000;
 const KEEPALIVE_INTERVAL_MS = 4000;
 
 let sttSawResult = false;      // เคยได้ผล (รวม interim) จาก Web Speech รอบนี้ไหม
-let webSpeechSilentRestarts = 0;
 let sttWatchdog = null;
-const WEBSPEECH_PROBATION_MS = 9000;      // เปิดฟังแล้วเงียบสนิทเกินนี้ = ไมค์ถูกยึด
-const WEBSPEECH_MAX_SILENT_RESTARTS = 3;  // onend เด้งซ้ำโดยไม่มีผลกี่ครั้งถึงจะยอมแพ้
+/* เดิมตั้งไว้ 9 วิแล้ว "ยอมแพ้" คือหยุดฟังถาวร ซึ่งผิด — เงียบเป็นเรื่องปกติ
+   คนเพิ่งเข้าห้องยังไม่ทันพูดก็โดนสั่งหยุดไปแล้ว
+   ตอนนี้ startSilent แก้ต้นตอ (Jitsi แย่งไมค์) ไปแล้ว ตัวจับเวลานี้จึงเหลือ
+   หน้าที่แค่ "ขึ้นคำแนะนำ" ไม่ใช่หยุดฟัง — ฟังต่อไปเรื่อย ๆ เสมอ */
+const WEBSPEECH_HINT_AFTER_MS = 20000;
 
 /* ลอง start() ให้สำเร็จจริง ๆ ไม่ใช่ลองครั้งเดียวแล้วปล่อย */
 function safeStartRecognition() {
@@ -207,10 +209,9 @@ function armSttWatchdog() {
   sttWatchdog = setTimeout(() => {
     if (sttSawResult || sttEngine === 'vosk' || voskFallbackPending) return;
     if (!recognitionWanted || !inCall) return;
-    recognitionWanted = false; // เลิกวน start() ใหม่ไปเรื่อย ๆ
-    setSttBadge(null);
+    // แค่บอกใบ้ ห้ามหยุดฟัง — ยังไม่พูดก็เป็นแบบนี้ได้ตามปกติ
     showMicBlockedGuidance();
-  }, WEBSPEECH_PROBATION_MS);
+  }, WEBSPEECH_HINT_AFTER_MS);
 }
 
 function disarmSttWatchdog() {
@@ -256,8 +257,8 @@ function setSttStatus(kind, text, ratio = null, showFallbackBtn = false) {
 function showMicBlockedGuidance() {
   setSttStatus(
     'warn',
-    'ไมค์ถูกวิดีโอคอลใช้อยู่ ระบบถอดเสียงอัตโนมัติเลยไม่ทำงาน — ' +
-    'แตะช่องพิมพ์ด้านล่าง แล้วกดปุ่มไมค์บนคีย์บอร์ดเพื่อพูดแทนพิมพ์ได้',
+    'ยังไม่ได้ยินเสียงพูดเลย — ยังฟังอยู่ พูดได้ตามปกติ ' +
+    'ถ้าพูดแล้วยังไม่ขึ้น ให้แตะช่องพิมพ์ด้านล่างแล้วกดปุ่มไมค์บนคีย์บอร์ดแทนได้',
     null,
     true
   );
@@ -581,9 +582,9 @@ function initSpeechRecognition() {
   r.onresult = (event) => {
     // ได้ผลแม้แต่ interim = ไมค์ถึงมือ Web Speech จริง ไม่ต้อง fallback
     sttSawResult = true;
-    webSpeechSilentRestarts = 0;
     disarmSttWatchdog();
 
+    setSttStatus(null); // ได้ยินแล้ว เอาคำแนะนำออก
     let interim = '';
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const res = event.results[i];
@@ -604,8 +605,7 @@ function initSpeechRecognition() {
       setSttBadge(null);
       toast('ไม่ได้รับสิทธิ์ใช้ไมค์สำหรับถอดเสียง ใช้ช่องพิมพ์แทนได้', 'warn', 6000);
     } else if (event.error === 'no-speech' || event.error === 'aborted') {
-      // ปกติแปลว่า "เงียบไปเฉย ๆ" — แต่ตอนไมค์ถูกยึดก็ได้ error นี้รัว ๆ
-      // เหมือนกัน ปล่อยให้ onend เป็นคนนับรอบและตัดสินใจ
+      // "เงียบไปเฉย ๆ" — เป็นเรื่องปกติมาก ไม่ต้องทำอะไร onend จะ start ใหม่เอง
       console.debug('speech recognition:', event.error);
     } else {
       // network / audio-capture ฯลฯ — พวกนี้หายเองได้ ให้ลอง start ใหม่ต่อไป
@@ -630,18 +630,9 @@ function initSpeechRecognition() {
       return;
     }
 
-    // onend ที่เด้งกลับมาโดยยังไม่เคยได้ผลเลย = อาการไมค์ถูกยึด
-    // แต่ถ้าเคยได้ผลแล้ว การจบรอบเป็นเรื่องปกติของ Web Speech ต้อง start ใหม่
-    if (!sttSawResult) {
-      webSpeechSilentRestarts += 1;
-      if (webSpeechSilentRestarts >= WEBSPEECH_MAX_SILENT_RESTARTS) {
-        disarmSttWatchdog();
-        recognitionWanted = false; // เลิกวน start() ใหม่ไปเรื่อย ๆ
-        setSttBadge(null);
-        showMicBlockedGuidance();
-        return;
-      }
-    }
+    // Web Speech จบรอบเองเป็นเรื่องปกติ (ครบรอบ / เงียบนาน) — เริ่มใหม่เสมอ
+    // เคยนับรอบที่ไม่มีผลแล้วสั่งหยุดถาวรตรงนี้ ซึ่งผิด: คนยังไม่ทันพูดก็
+    // เข้าเงื่อนไขได้ ผลคือพูดทีหลังแล้วไม่มีอะไรขึ้นเลยทั้งสาย
     scheduleRecognitionRestart();
   };
 
@@ -655,7 +646,6 @@ function startListening() {
   if (!recognition) return;
   recognitionWanted = true;
   sttSawResult = false;
-  webSpeechSilentRestarts = 0;
   restartDelay = RESTART_DELAY_MIN;
   sttEngine = 'webspeech';
   setSttBadge('webspeech');
