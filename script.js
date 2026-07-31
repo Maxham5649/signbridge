@@ -103,6 +103,48 @@ let voskGainNode = null;
 let voskMediaStream = null;
 let voskFallbackPending = false; // true ระหว่างกำลังสลับมา Vosk (กันโหลดซ้ำ/restart Web Speech ซ้ำ)
 
+/* ตัวจับอาการ "Web Speech ทำงานแต่ไม่ได้ยินอะไรเลย"
+
+   บน Android ตอน Jitsi ถือไมค์อยู่ service ถอดเสียงของ Google (คนละ
+   process กับ Chrome) เปิดไมค์ไม่ได้ แล้วขึ้น toast ของระบบว่า
+   "Speech Recognition and Synthesis from Google cannot record now as
+   Chrome is recording"
+
+   เคสนี้ Chrome ไม่ยิง error ที่บอกอะไรได้เลย — start() สำเร็จ, badge
+   ขึ้น "กำลังฟัง", แล้ว onend เด้งทันทีโดยไม่มีผลลัพธ์ ซึ่ง onend เดิม
+   จะ start() ใหม่ วนแบบนี้ไปเรื่อย ๆ เงียบ ๆ ตลอดสาย
+   (no-speech/aborted ก็ถูกกรองทิ้งที่ onerror ด้วย)
+
+   จึงต้องดูจาก "ไม่มีผลลัพธ์" แทนที่จะรอ error code */
+let sttSawResult = false;      // เคยได้ผล (รวม interim) จาก Web Speech รอบนี้ไหม
+let webSpeechSilentRestarts = 0;
+let sttWatchdog = null;
+const WEBSPEECH_PROBATION_MS = 9000;      // เปิดฟังแล้วเงียบสนิทเกินนี้ = ไมค์ถูกยึด
+const WEBSPEECH_MAX_SILENT_RESTARTS = 3;  // onend เด้งซ้ำโดยไม่มีผลกี่ครั้งถึงจะยอมแพ้
+
+function armSttWatchdog() {
+  clearTimeout(sttWatchdog);
+  sttWatchdog = setTimeout(() => {
+    if (sttSawResult || sttEngine === 'vosk' || voskFallbackPending) return;
+    if (!recognitionWanted || !inCall) return;
+    toast('ไมค์ถูกวิดีโอคอลใช้อยู่ ถอดเสียงของ Chrome เลยไม่ทำงาน — สลับไประบบสำรอง', 'warn', 6000);
+    startListeningVosk();
+  }, WEBSPEECH_PROBATION_MS);
+}
+
+function disarmSttWatchdog() {
+  clearTimeout(sttWatchdog);
+  sttWatchdog = null;
+}
+
+/* badge บอกด้วยว่ากำลังใช้เอนจินไหน — ที่ผ่านมาขึ้น "กำลังฟัง" เหมือนกัน
+   ทั้งตอนทำงานจริงและตอนค้างอยู่ในลูปเงียบ แยกไม่ออกเลย */
+function setSttBadge(engine) {
+  if (!engine) { els.sttBadge.hidden = true; return; }
+  els.sttBadge.textContent = engine === 'vosk' ? 'กำลังฟัง · สำรอง' : 'กำลังฟัง';
+  els.sttBadge.hidden = false;
+}
+
 /* ==========================================================
    UI helpers
    ========================================================== */
@@ -394,6 +436,11 @@ function initSpeechRecognition() {
   r.interimResults = true;
 
   r.onresult = (event) => {
+    // ได้ผลแม้แต่ interim = ไมค์ถึงมือ Web Speech จริง ไม่ต้อง fallback
+    sttSawResult = true;
+    webSpeechSilentRestarts = 0;
+    disarmSttWatchdog();
+
     let interim = '';
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const res = event.results[i];
@@ -410,9 +457,14 @@ function initSpeechRecognition() {
   r.onerror = (event) => {
     if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
       recognitionWanted = false;
-      els.sttBadge.hidden = true;
+      disarmSttWatchdog();
+      setSttBadge(null);
       toast('ไม่ได้รับสิทธิ์ใช้ไมค์สำหรับถอดเสียง ใช้ช่องพิมพ์แทนได้', 'warn', 6000);
-    } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
+    } else if (event.error === 'no-speech' || event.error === 'aborted') {
+      // ปกติแปลว่า "เงียบไปเฉย ๆ" — แต่ตอนไมค์ถูกยึดก็ได้ error นี้รัว ๆ
+      // เหมือนกัน ปล่อยให้ onend เป็นคนนับรอบและตัดสินใจ
+      console.debug('speech recognition:', event.error);
+    } else {
       // เคสอื่น ๆ (เช่น audio-capture — ไมค์ชนกับ WebRTC ของ Jitsi บนมือถือ
       // Android ที่เจอจริง) — สลับไปใช้ Vosk (รันในเบราว์เซอร์เอง ไม่ผ่าน
       // service ของ Google ที่โดนบล็อก) แทนอัตโนมัติ
@@ -427,11 +479,24 @@ function initSpeechRecognition() {
   r.onend = () => {
     els.signInterim.textContent = '';
     if (sttEngine === 'vosk' || voskFallbackPending) return; // กำลัง/สลับไป Vosk แล้ว ไม่ต้อง restart Web Speech
-    if (recognitionWanted && inCall) {
-      try { r.start(); } catch (_) { /* ยังไม่หยุดสนิท ข้ามรอบนี้ */ }
-    } else {
-      els.sttBadge.hidden = true;
+    if (!recognitionWanted || !inCall) {
+      disarmSttWatchdog();
+      setSttBadge(null);
+      return;
     }
+
+    // onend ที่เด้งกลับมาโดยยังไม่เคยได้ผลเลย = อาการไมค์ถูกยึด
+    // ปล่อยให้ start() ใหม่เรื่อย ๆ จะวนเงียบตลอดสายแบบที่เจอบนมือถือ
+    if (!sttSawResult) {
+      webSpeechSilentRestarts += 1;
+      if (webSpeechSilentRestarts >= WEBSPEECH_MAX_SILENT_RESTARTS) {
+        disarmSttWatchdog();
+        toast('ถอดเสียงของ Chrome เปิดไมค์ไม่ได้ (วิดีโอคอลใช้อยู่) — สลับไประบบสำรอง', 'warn', 6000);
+        startListeningVosk();
+        return;
+      }
+    }
+    try { r.start(); } catch (_) { /* ยังไม่หยุดสนิท ข้ามรอบนี้ */ }
   };
 
   return r;
@@ -443,10 +508,13 @@ function startListening() {
   if (!recognition) recognition = initSpeechRecognition();
   if (!recognition) return;
   recognitionWanted = true;
+  sttSawResult = false;
+  webSpeechSilentRestarts = 0;
   try {
     recognition.start();
     sttEngine = 'webspeech';
-    els.sttBadge.hidden = false;
+    setSttBadge('webspeech');
+    armSttWatchdog();
   } catch (err) {
     // InvalidStateError = กำลังทำงานอยู่แล้ว เป็นเคสปกติ เงียบได้
     // อย่างอื่น (เช่นมือถือบล็อกเพราะไม่ได้เรียกจาก user gesture ตรง ๆ)
@@ -461,7 +529,8 @@ function startListening() {
 function stopListening() {
   recognitionWanted = false;
   voskFallbackPending = false;
-  els.sttBadge.hidden = true;
+  disarmSttWatchdog();
+  setSttBadge(null);
   els.signInterim.textContent = '';
   if (recognition) { try { recognition.stop(); } catch (_) {} }
   stopListeningVosk();
@@ -505,9 +574,10 @@ async function startListeningVosk() {
   if (voskFallbackPending) return; // กำลังโหลด/สลับอยู่แล้วจากรอบก่อนหน้า
   recognitionWanted = true;
   voskFallbackPending = true;
-  els.sttBadge.hidden = true; // ยังไม่พร้อมฟังจริงจนกว่าจะโหลด/เปิดไมค์เสร็จ
+  disarmSttWatchdog();
+  setSttBadge(null); // ยังไม่พร้อมฟังจริงจนกว่าจะโหลด/เปิดไมค์เสร็จ
   try {
-    toast('กำลังโหลดระบบถอดเสียงสำรอง (~84MB อาจใช้เวลาสักครู่บนมือถือ)', 'info', 6000);
+    toast('กำลังโหลดระบบถอดเสียงสำรอง (~84MB ครั้งแรกครั้งเดียว) — ระหว่างนี้พิมพ์ในช่องด้านล่างแทนได้', 'info', 8000);
     await ensureVoskModel();
     if (!recognitionWanted || !inCall) return; // ผู้ใช้ปิดไมค์/วางสายระหว่างโหลด
 
@@ -520,7 +590,21 @@ async function startListeningVosk() {
       return;
     }
 
-    voskRecognizer = new voskModel.KaldiRecognizer(16000);
+    // ต้องสร้าง AudioContext ก่อน แล้วค่อยบอก sample rate จริงให้ Kaldi
+    // ของเดิม hardcode 16000 แต่ Android ส่วนใหญ่ให้ 48000 (constraint
+    // sampleRate ใน getUserMedia ถูกเมินบ่อย) พอ rate ไม่ตรงกับที่ป้อนเข้าไป
+    // ผลลัพธ์จะเพี้ยนหรือไม่ออกอะไรเลย
+    voskAudioContext = new AudioContext();
+    // มือถือเปิด AudioContext มาในสถานะ suspended ถ้าไม่ได้สร้างจาก
+    // user gesture ตรง ๆ — ถ้าไม่ resume onaudioprocess จะไม่ยิงสักครั้ง
+    if (voskAudioContext.state === 'suspended') {
+      try { await voskAudioContext.resume(); } catch (_) { /* ดูสถานะจริงข้างล่างอีกที */ }
+    }
+    if (voskAudioContext.state !== 'running') {
+      throw new Error('เบราว์เซอร์ยังไม่ปลดล็อกเสียง — แตะหน้าจอสักครั้งแล้วเปิดไมค์ใหม่');
+    }
+
+    voskRecognizer = new voskModel.KaldiRecognizer(voskAudioContext.sampleRate);
     voskRecognizer.on('result', (message) => {
       const text = ((message.result && message.result.text) || '').trim();
       if (text) broadcast('speech', text);
@@ -529,7 +613,6 @@ async function startListeningVosk() {
       els.signInterim.textContent = (message.result && message.result.partial) || '';
     });
 
-    voskAudioContext = new AudioContext();
     voskSourceNode = voskAudioContext.createMediaStreamSource(voskMediaStream);
     voskProcessorNode = voskAudioContext.createScriptProcessor(4096, 1, 1);
     voskProcessorNode.onaudioprocess = (event) => {
@@ -545,7 +628,8 @@ async function startListeningVosk() {
     voskGainNode.connect(voskAudioContext.destination);
 
     sttEngine = 'vosk';
-    els.sttBadge.hidden = false;
+    setSttBadge('vosk');
+    toast('ระบบถอดเสียงสำรองพร้อมแล้ว พูดได้เลย', 'ok', 4000);
   } catch (err) {
     console.error('Vosk fallback failed:', err);
     toast(`ระบบถอดเสียงสำรองใช้ไม่ได้ (${(err && err.message) || err}) ใช้ช่องพิมพ์แทนได้`, 'error', 7000);
