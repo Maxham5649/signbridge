@@ -17,7 +17,7 @@
    TWA ดึงหน้าเว็บสด ไม่ได้ฝังโค้ดไว้ในตัว APK เวลาไล่บั๊กจึงต้องมีอะไร
    ยืนยันได้ว่าเครื่องนั้นได้ของใหม่แล้วจริง ไม่ใช่ค้างของเก่าอยู่
    *** แก้เลขนี้ทุกครั้งที่ push โค้ดขึ้น production *** */
-const APP_BUILD = 'b10';
+const APP_BUILD = 'b11';
 
 const $ = (id) => document.getElementById(id);
 
@@ -639,9 +639,26 @@ function initSpeechRecognition() {
   return r;
 }
 
+/* ขอสิทธิ์ไมค์ให้โดเมนนี้ครั้งเดียว แล้วปล่อยไมค์คืนทันที
+
+   โหมด startSilent ทำให้ Jitsi ไม่เรียก getUserMedia อีกต่อไป ซึ่งเมื่อก่อน
+   เป็นตัวที่ทำให้โดเมนได้สิทธิ์ไมค์ไปโดยปริยาย ถ้าไม่มีใครขอเลย
+   SpeechRecognition อาจถูกปฏิเสธด้วย not-allowed
+   หยุด track ทันทีที่ได้ เพื่อไม่ให้ไปยึดไมค์แทน Jitsi เสียเอง */
+let micPermissionPrimed = false;
+function primeMicPermission() {
+  if (micPermissionPrimed || !navigator.mediaDevices) return Promise.resolve();
+  micPermissionPrimed = true;
+  return navigator.mediaDevices
+    .getUserMedia({ audio: true })
+    .then((stream) => { stream.getTracks().forEach((t) => t.stop()); })
+    .catch((err) => { console.warn('mic permission priming failed:', err); });
+}
+
 function startListening() {
   if (localRole !== 'hearing') return;
   if (sttEngine === 'vosk') { startListeningVosk(); return; } // เคย fallback แล้ว ใช้ต่อเลย
+  if (silentAudio) primeMicPermission(); // ไม่ต้องรอ ปล่อยให้ start() ลองไปก่อน
   if (!recognition) recognition = initSpeechRecognition();
   if (!recognition) return;
   recognitionWanted = true;
@@ -944,6 +961,12 @@ function handleLeftMeeting() {
 }
 
 function handleAudioMuteStatusChanged(ev) {
+  /* โหมด startSilent: Jitsi ไม่มี audio track เลย จึงรายงานกลับมาว่า muted
+     เสมอ ถ้าเอาค่านั้นมาคุมการถอดเสียง มันจะสั่ง stopListening() ทันทีที่
+     เข้าห้อง — ซึ่งเป็นเหตุที่พูดแล้วไม่มีอะไรขึ้นเลย
+     โหมดนี้ไมค์เป็นของเราคนเดียว สถานะของ Jitsi ไม่เกี่ยวข้อง */
+  if (silentAudio) return;
+
   micOn = !ev.muted;
   els.micBtn.setAttribute('aria-pressed', String(micOn));
   els.micLabel.textContent = micOn ? 'ปิดไมค์' : 'เปิดไมค์';
@@ -1037,11 +1060,13 @@ function joinRoom(rawInput, role) {
   localRole = role;
   // เปิดเฉพาะฝั่งผู้ได้ยิน และเฉพาะเมื่อผู้ใช้ไม่ได้สั่งปิดเอง
   silentAudio = role === 'hearing' && els.silentAudioToggle.checked;
-  micOn = !silentAudio;
+  // โหมด startSilent ไมค์ไม่ได้เข้าสาย แต่ยังใช้ถอดเสียงอยู่ ปุ่มไมค์จึงหมายถึง
+  // "กำลังฟังเพื่อแปลอยู่ไหม" ไม่ใช่สถานะ audio track ของ Jitsi
+  micOn = true;
   camOn = true;
-  els.micBtn.setAttribute('aria-pressed', String(micOn));
+  els.micBtn.setAttribute('aria-pressed', 'true');
   els.camBtn.setAttribute('aria-pressed', 'true');
-  els.micLabel.textContent = micOn ? 'ปิดไมค์' : 'เปิดไมค์';
+  els.micLabel.textContent = silentAudio ? 'หยุดฟัง' : 'ปิดไมค์';
   els.camLabel.textContent = 'ปิดกล้อง';
 
   setStatus('กำลังเชื่อมต่อ…', false);
@@ -1134,14 +1159,19 @@ els.endBtn.addEventListener('click', leaveRoom);
 
 els.micBtn.addEventListener('click', () => {
   if (!jitsiApi) return;
-  jitsiApi.executeCommand('toggleAudio');
-  // เรียก start/stopListening() ตรงจาก click handler นี้ (user gesture จริง)
-  // เป็นอีกเส้นทางเสริมจาก handleAudioMuteStatusChanged — เบราว์เซอร์มือถือ
-  // บางตัวบล็อก SpeechRecognition.start() ถ้าไม่ได้เรียกจาก user gesture
-  // โดยตรง (event จาก postMessage ของ Jitsi ไม่นับ) เรียกซ้ำสองทางไม่พัง
-  // เพราะ startListening()/stopListening() ทนต่อการเรียกซ้ำอยู่แล้ว
+
+  // โหมด startSilent ไม่มี audio track ให้ Jitsi สลับ ปุ่มนี้จึงคุมการถอดเสียง
+  // ของเราเองล้วน ๆ — และเรียกจาก click โดยตรงแบบนี้คือ user gesture จริง
+  // ซึ่งมือถือบางตัวบังคับสำหรับ SpeechRecognition.start()
+  if (!silentAudio) jitsiApi.executeCommand('toggleAudio');
+
   if (localRole === 'hearing') {
     if (micOn) stopListening(); else startListening();
+  }
+  if (silentAudio) {
+    micOn = !micOn;
+    els.micBtn.setAttribute('aria-pressed', String(micOn));
+    els.micLabel.textContent = micOn ? 'หยุดฟัง' : 'เริ่มฟัง';
   }
 });
 
