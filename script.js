@@ -42,15 +42,23 @@ const els = {
   signInputPanel: $('signInputPanel'),
   signCamToggleBtn: $('signCamToggleBtn'),
   signInputBody: $('signInputBody'),
+  signHandBadge: $('signHandBadge'),
   signTabRecognize: $('signTabRecognize'),
   signTabTrain: $('signTabTrain'),
   signRecognizeMode: $('signRecognizeMode'),
   signTrainMode: $('signTrainMode'),
   signRecognizeBtn: $('signRecognizeBtn'),
   signRecognizeResult: $('signRecognizeResult'),
+  signRankList: $('signRankList'),
+  signSpeakLocal: $('signSpeakLocal'),
   signTrainLabel: $('signTrainLabel'),
   signTrainBtn: $('signTrainBtn'),
   signTrainedList: $('signTrainedList'),
+  signStrictness: $('signStrictness'),
+  signStrictnessVal: $('signStrictnessVal'),
+  signExportBtn: $('signExportBtn'),
+  signImportBtn: $('signImportBtn'),
+  signImportFile: $('signImportFile'),
 
   bridgeBars: $('bridgeBars'),
   roomInput: $('roomInput'),
@@ -347,11 +355,16 @@ function deliver(dir, text) {
   if (!text) return;
   if (dir === 'speech') {
     playSignAvatar(text);
-  } else {
-    renderSignToText(text);
-    // ฝั่งได้ยินเท่านั้นที่อ่านออกเสียง
-    if (localRole === 'hearing') speakThai(text);
+    return;
   }
+  renderSignToText(text);
+
+  // อ่านออกเสียงทั้งสองฝั่ง:
+  // - ฝั่งผู้ได้ยิน อ่านเสมอ เพราะเป็นปลายทางของคำแปล
+  // - ฝั่งผู้หูหนวก อ่านด้วยถ้าเปิดสวิตช์ไว้ — ให้คนที่ยืนอยู่ข้าง ๆ
+  //   ได้ยินท่าที่เพิ่งทำ โดยไม่ต้องมีสายเลย
+  const speakHere = localRole === 'hearing' || (els.signSpeakLocal && els.signSpeakLocal.checked);
+  if (speakHere) speakThai(text);
 }
 
 function broadcast(dir, text) {
@@ -605,7 +618,7 @@ function handleJoinedMeeting() {
   }
 
   // จดจำท่าภาษามือจากกล้อง (Phase 2) — เฉพาะฝั่งหูหนวกเท่านั้นที่ทำท่าใส่กล้องได้
-  els.signInputPanel.hidden = localRole !== 'deaf';
+  syncSignPanelVisibility();
   if (localRole === 'deaf') renderTrainedList();
 
   toast('เข้าร่วมห้องแล้ว', 'ok');
@@ -652,10 +665,10 @@ function handleLeftMeeting() {
 
   // จดจำท่าภาษามือ (Phase 2) — ปิดกล้องแยกด้วย ไม่ปล่อยค้างหลังวางสาย
   stopSignCamera();
-  els.signInputPanel.hidden = true;
   els.signInputBody.hidden = true;
   els.signCamToggleBtn.textContent = 'เปิดกล้อง';
   els.signCamToggleBtn.setAttribute('aria-pressed', 'false');
+  syncSignPanelVisibility(); // ยังโชว์ต่อได้ถ้าบทบาทที่เลือกไว้คือผู้หูหนวก
 
   destroyJitsi();
 }
@@ -877,17 +890,34 @@ els.composerInput.addEventListener('keydown', (e) => {
    addSignReference/removeSignLabel/getTrainedLabelCounts)
    ========================================================== */
 
+/* โชว์แผงจดจำท่าเมื่อบทบาทเป็น "ผู้หูหนวก" — ไม่ต้องรอเข้าห้องก่อน
+   เพราะการฝึกท่าต้องทำล่วงหน้า และการอ่านออกเสียงที่เครื่องตัวเอง
+   ก็ใช้ได้โดยไม่ต้องมีสาย */
+function syncSignPanelVisibility() {
+  const role = inCall ? localRole : els.roleSelect.value;
+  els.signInputPanel.hidden = role !== 'deaf';
+}
+
+els.roleSelect.addEventListener('change', () => {
+  syncSignPanelVisibility();
+  if (els.roleSelect.value === 'deaf') renderTrainedList();
+});
+
 function renderTrainedList() {
   const items = getTrainedLabelCounts();
   els.signTrainedList.innerHTML = '';
+  const thin = items.filter((i) => i.count < 2).length;
   els.signRecognizeResult.textContent = items.length === 0
     ? 'ยังไม่ได้ฝึกสอนท่าไหนเลย — ไปแท็บ "ฝึกสอน" ก่อน'
-    : `ฝึกไว้แล้ว ${items.length} คำ — กดปุ่มด้านล่างแล้วทำท่า`;
+    : thin > 0
+      ? `ฝึกไว้ ${items.length} คำ — มี ${thin} คำที่มีตัวอย่างเดียว ควรอัดเพิ่มให้ครบ 3-5 ครั้ง`
+      : `ฝึกไว้แล้ว ${items.length} คำ — กดปุ่มด้านล่างแล้วทำท่า`;
   for (const { label, count } of items) {
     const li = document.createElement('li');
     li.className = 'sign-trained-item';
     const span = document.createElement('span');
     span.textContent = `${label} (${count} ตัวอย่าง)`;
+    if (count < 2) span.classList.add('is-thin');
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = 'ลบ';
@@ -898,6 +928,27 @@ function renderTrainedList() {
     li.append(span, btn);
     els.signTrainedList.appendChild(li);
   }
+}
+
+/* แสดงอันดับความใกล้เคียง — ที่ผ่านมาบอกแค่ "จับท่าไม่ได้" ซึ่งไม่พอ
+   ให้ผู้ใช้รู้ว่าควรฝึกเพิ่ม หรือควรเปลี่ยนท่าให้ต่างจากคำอื่นมากขึ้น */
+function renderRank(ranked, acceptedLabel) {
+  els.signRankList.innerHTML = '';
+  if (!ranked || ranked.length === 0) { els.signRankList.hidden = true; return; }
+  for (const r of ranked.slice(0, 3)) {
+    const li = document.createElement('li');
+    li.className = 'sign-rank-item';
+    if (r.label === acceptedLabel) li.classList.add('is-match');
+    const name = document.createElement('span');
+    name.textContent = r.label;
+    const num = document.createElement('span');
+    num.className = 'sign-rank-num';
+    // ระยะ / รัศมีที่ยอมรับของคำนั้น — ต่ำกว่า 1.00 คือเข้าเกณฑ์
+    num.textContent = `${r.distance.toFixed(2)} / ${r.radius.toFixed(2)}`;
+    li.append(name, num);
+    els.signRankList.appendChild(li);
+  }
+  els.signRankList.hidden = false;
 }
 
 els.signCamToggleBtn.addEventListener('click', async () => {
@@ -914,6 +965,7 @@ els.signCamToggleBtn.addEventListener('click', async () => {
   try {
     await ensureSignCamera();
     await loadHandLandmarker(); // โหลดโมเดลรอไว้เลย กันหน่วงตอนกดปุ่มกด-ค้างครั้งแรก
+    await startDetectionLoop(); // ให้ badge บอกสถานะ "เห็นมือไหม" ตั้งแต่ยังไม่กดปุ่ม
     els.signCamToggleBtn.textContent = 'ปิดกล้อง';
     els.signCamToggleBtn.setAttribute('aria-pressed', 'true');
     els.signInputBody.hidden = false;
@@ -937,6 +989,60 @@ function setSignInputMode(mode) {
 
 els.signTabRecognize.addEventListener('click', () => setSignInputMode('recognize'));
 els.signTabTrain.addEventListener('click', () => setSignInputMode('train'));
+
+/* badge "เห็นมือไหม" — เดิม element นี้มีใน HTML แต่ไม่มีโค้ดอัปเดตเลย
+   ผู้ใช้จึงไม่มีทางรู้ว่ากล้องเห็นมืออยู่หรือเปล่าตอนทำท่า */
+setHandsCountListener((count) => {
+  const badge = els.signHandBadge;
+  if (!badge) return;
+  badge.hidden = false;
+  badge.textContent = count === 0 ? 'ไม่เจอมือ' : count === 1 ? 'เจอมือ 1 ข้าง' : 'เจอมือ 2 ข้าง';
+  badge.classList.toggle('is-ok', count > 0);
+});
+
+/* สไลเดอร์ความเข้มงวด — เก็บเป็นจำนวนเต็ม 1..30 แล้วหาร 10 เป็น spreadK */
+function applyStrictness(raw) {
+  const k = Number(raw) / 10;
+  setMatchConfig({ spreadK: k });
+  els.signStrictnessVal.textContent = k.toFixed(1);
+  try { localStorage.setItem('signbridge-strictness', String(raw)); } catch (_) { /* โหมดส่วนตัวเขียนไม่ได้ ไม่เป็นไร */ }
+}
+els.signStrictness.addEventListener('input', (e) => applyStrictness(e.target.value));
+try {
+  const saved = localStorage.getItem('signbridge-strictness');
+  if (saved) els.signStrictness.value = saved;
+} catch (_) { /* ไม่มีก็ใช้ค่า default ใน HTML */ }
+applyStrictness(els.signStrictness.value);
+
+/* ---------- ย้ายท่าที่ฝึกไว้ข้ามเครื่อง ---------- */
+els.signExportBtn.addEventListener('click', () => {
+  const items = getTrainedLabelCounts();
+  if (items.length === 0) { toast('ยังไม่มีท่าให้บันทึก', 'warn'); return; }
+  const blob = new Blob([exportReferences()], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `signbridge-signs-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`บันทึก ${items.length} คำเป็นไฟล์แล้ว`, 'ok');
+});
+
+els.signImportBtn.addEventListener('click', () => els.signImportFile.click());
+
+els.signImportFile.addEventListener('change', async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  try {
+    const { labels, samples } = importReferences(await file.text(), { merge: true });
+    toast(`โหลดเข้ามา ${labels} คำ (${samples} ตัวอย่าง)`, 'ok', 5000);
+    renderTrainedList();
+  } catch (err) {
+    toast(`โหลดไฟล์ไม่สำเร็จ: ${(err && err.message) || err}`, 'error', 6000);
+  } finally {
+    e.target.value = ''; // ให้เลือกไฟล์เดิมซ้ำได้
+  }
+});
 
 // ปุ่มกด-ค้าง: เริ่มจับตอนกด หยุดตอนปล่อย (mouse + touch)
 function bindHoldButton(btn, onStart, onEnd) {
@@ -963,10 +1069,13 @@ function bindHoldButton(btn, onStart, onEnd) {
 }
 
 // โหมดใช้งานจริง: กดค้างทำท่า → ปล่อย → จับคู่กับท่าที่ฝึกไว้ → broadcast('sign', ...)
+const MIN_CAPTURE_FRAMES = 3; // สั้นกว่านี้ (~240ms) คือกดพลาด ไม่ใช่ท่าจริง
+
 bindHoldButton(
   els.signRecognizeBtn,
   () => {
     els.signRecognizeResult.textContent = 'กำลังจับท่า...';
+    els.signRankList.hidden = true;
     startSignCapture().catch((err) => {
       console.error('จับภาพท่าไม่สำเร็จ:', err);
       els.signRecognizeResult.textContent = `จับภาพไม่สำเร็จ (${(err && err.message) || err})`;
@@ -975,15 +1084,34 @@ bindHoldButton(
   () => {
     const seq = stopCapture();
     if (seq.length === 0) {
-      els.signRecognizeResult.textContent = 'ไม่เห็นมือเลย ลองใหม่ให้กล้องเห็นมือชัด ๆ';
+      els.signRecognizeResult.textContent = 'ไม่เห็นมือเลย — ขยับมือเข้ามาในกรอบให้เห็นชัด ๆ แล้วลองใหม่';
       return;
     }
-    const match = matchSignSequence(seq);
-    if (match) {
-      els.signRecognizeResult.textContent = `จับได้: "${match.label}" (ส่งแล้ว)`;
-      broadcast('sign', match.label);
+    if (seq.length < MIN_CAPTURE_FRAMES) {
+      els.signRecognizeResult.textContent = 'กดค้างสั้นไป — กดค้างไว้ตลอดจนทำท่าจบแล้วค่อยปล่อย';
+      return;
+    }
+
+    const m = matchSignSequence(seq);
+    renderRank(m.ranked, m.accepted ? m.label : null);
+
+    if (m.accepted) {
+      els.signRecognizeResult.textContent = `จับได้: "${m.label}" — ส่งแล้ว`;
+      broadcast('sign', m.label);
+      return;
+    }
+
+    // บอกเหตุผลให้ตรงจุด เพราะแต่ละกรณีผู้ใช้ต้องแก้คนละแบบ
+    if (m.reason === 'no-training') {
+      els.signRecognizeResult.textContent = 'ยังไม่ได้ฝึกท่าไหนเลย — ไปแท็บ "ฝึกสอน" ก่อน';
+    } else if (m.reason === 'ambiguous') {
+      els.signRecognizeResult.textContent =
+        `ก้ำกึ่งระหว่าง "${m.best.label}" กับ "${m.runnerUp.label}" — สองท่านี้คล้ายกันเกินไป ` +
+        'อัดตัวอย่างเพิ่มให้ต่างกันชัดขึ้น';
     } else {
-      els.signRecognizeResult.textContent = 'จับท่าไม่ได้ ลองพิมพ์แทนในช่องด้านล่างได้';
+      els.signRecognizeResult.textContent =
+        `ไม่ตรงกับท่าไหนเลย (ใกล้สุดคือ "${m.best.label}") — ` +
+        'ถ้าท่านี้ถูกแล้ว ให้อัดเพิ่มในแท็บ "ฝึกสอน" อีกสัก 2-3 ครั้ง';
     }
   }
 );
@@ -1005,9 +1133,22 @@ bindHoldButton(
   () => {
     const label = els.signTrainLabel.value.trim();
     const seq = stopCapture();
-    if (!label || seq.length === 0) return;
+    if (!label) return;
+    if (seq.length === 0) {
+      toast('ไม่เห็นมือเลย — ขยับมือเข้ามาในกรอบแล้วอัดใหม่', 'warn', 5000);
+      return;
+    }
+    if (seq.length < MIN_CAPTURE_FRAMES) {
+      toast('กดค้างสั้นไป — ตัวอย่างนี้ไม่ถูกบันทึก', 'warn', 5000);
+      return;
+    }
     const count = addSignReference(label, seq);
-    toast(`บันทึกท่า "${label}" แล้ว (${count} ตัวอย่าง)`, 'ok');
+    toast(
+      count < 3
+        ? `บันทึกท่า "${label}" แล้ว (${count} ตัวอย่าง — ควรอัดให้ครบ 3-5 ครั้ง)`
+        : `บันทึกท่า "${label}" แล้ว (${count} ตัวอย่าง)`,
+      'ok'
+    );
     renderTrainedList();
   }
 );

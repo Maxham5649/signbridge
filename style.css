@@ -603,6 +603,135 @@ button { font-family: inherit; }
   font-weight: 600;
 }
 
+/* คำที่มีตัวอย่างเดียว — วัดความกระจายไม่ได้ ต้องเดารัศมีให้ ความแม่นจึงต่ำกว่า */
+.sign-trained-item span.is-thin { color: var(--warn); }
+
+/* ===== กล้องจดจำท่า: preview + สถานะเห็นมือ ===== */
+.sign-cam-preview-wrap {
+  position: relative;
+  align-self: center;
+}
+
+.sign-cam-preview {
+  width: 100%;
+  max-width: 220px;
+  border-radius: var(--radius-sm);
+  background: #0B1B33;
+  transform: scaleX(-1); /* กระจกเงา — ขยับมือซ้ายแล้วภาพขยับซ้ายตาม ไม่งั้นทำท่าตามยาก */
+  display: block;
+}
+
+.sign-hand-badge {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(228, 72, 58, 0.92);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+
+.sign-hand-badge.is-ok { background: rgba(31, 174, 107, 0.92); }
+
+/* ===== อันดับความใกล้เคียง ===== */
+.sign-rank-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sign-rank-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 10px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.sign-rank-item.is-match {
+  background: var(--success-light);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sign-rank-num {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+/* ===== สวิตช์อ่านออกเสียงที่เครื่องนี้ ===== */
+.sign-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.sign-check input { accent-color: var(--primary); }
+
+/* ===== สไลเดอร์ความเข้มงวด + ย้ายท่าข้ามเครื่อง ===== */
+.sign-tune {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.sign-tune-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.sign-tune-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--primary);
+  min-width: 0;
+}
+
+.sign-tune-val {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text);
+  min-width: 2.2em;
+  text-align: right;
+}
+
+.sign-io {
+  display: flex;
+  gap: 8px;
+}
+
+.sign-io-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sign-io-btn:hover { background: var(--primary-light); }
+
 /* ===== Bridge (signature element) ===== */
 .bridge {
   width: 56px;

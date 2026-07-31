@@ -132,6 +132,12 @@
               <div class="sign-recognize-mode" id="signRecognizeMode">
                 <button type="button" class="sign-hold-btn" id="signRecognizeBtn">กดค้าง แล้วทำท่า</button>
                 <p class="sign-input-hint" id="signRecognizeResult">ยังไม่ได้ฝึกสอนท่าไหนเลย</p>
+                <!-- อันดับความใกล้เคียง — บอกว่าทำไมถึงรับ/ไม่รับ ไม่ใช่แค่ "จับไม่ได้" -->
+                <ul class="sign-rank-list" id="signRankList" hidden></ul>
+                <label class="sign-check">
+                  <input type="checkbox" id="signSpeakLocal" checked>
+                  <span>อ่านออกเสียงที่เครื่องนี้ด้วย</span>
+                </label>
               </div>
 
               <div class="sign-train-mode" id="signTrainMode" hidden>
@@ -139,6 +145,22 @@
                 <button type="button" class="sign-hold-btn" id="signTrainBtn">กดค้าง แล้วอัดท่านี้</button>
                 <p class="sign-input-hint" id="signTrainHint">พิมพ์ชื่อคำก่อน แล้วกดปุ่มค้างขณะทำท่า ทำซ้ำ 3-5 ครั้งต่อคำ</p>
                 <ul class="sign-trained-list" id="signTrainedList"></ul>
+
+                <div class="sign-tune">
+                  <label class="sign-tune-row" for="signStrictness">
+                    <span>ความเข้มงวด</span>
+                    <input type="range" id="signStrictness" min="1" max="30" step="1" value="18">
+                    <span class="sign-tune-val" id="signStrictnessVal">1.8</span>
+                  </label>
+                  <p class="sign-input-hint">ยิ่งน้อยยิ่งเข้ม (จับยากขึ้นแต่แปลผิดน้อยลง) — ค่าเริ่มต้น 1.8 มาจากการวัดจริง</p>
+                </div>
+
+                <div class="sign-io">
+                  <button type="button" id="signExportBtn" class="sign-io-btn">บันทึกท่าเป็นไฟล์</button>
+                  <button type="button" id="signImportBtn" class="sign-io-btn">โหลดท่าจากไฟล์</button>
+                  <input type="file" id="signImportFile" accept="application/json,.json" hidden>
+                </div>
+                <p class="sign-input-hint">ท่าเก็บอยู่ในเบราว์เซอร์ของเครื่องนี้เท่านั้น — ย้ายไปเครื่องอื่นด้วยไฟล์นี้</p>
               </div>
             </div>
           </div>
