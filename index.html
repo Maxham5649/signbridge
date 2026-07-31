@@ -106,7 +106,13 @@
             <span class="box-badge" id="sttBadge" hidden>กำลังฟัง</span>
           </div>
           <div class="sign-player" id="signPlayer">
-            <video class="sign-video" id="signVideo" playsinline hidden></video>
+            <!-- muted จำเป็น ไม่ใช่แค่ของแถม: คลิปภาษามือไม่มีเสียงอยู่แล้ว แต่ถ้า
+                 ไม่ประกาศ Android จะถือว่าเป็นสื่อมีเสียง แล้ว
+                 1) เอาไปโชว์เป็นตัวเล่นเพลงบนแถบแจ้งเตือน
+                 2) ให้มันแย่ง audio focus กับตัวถอดเสียง คลิปเลยหยุด-เล่นสลับ
+                    ไปมาทุกครั้งที่ recognizer เริ่มรอบใหม่
+                 disableremoteplayback กันปุ่ม cast โผล่ด้วย -->
+            <video class="sign-video" id="signVideo" playsinline muted disableremoteplayback hidden></video>
             <div class="sign-avatar" id="signAvatar">
               <svg viewBox="0 0 100 100" width="72" height="72" fill="none" stroke="currentColor" stroke-width="2.5">
                 <circle cx="50" cy="30" r="16"/>

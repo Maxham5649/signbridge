@@ -17,7 +17,7 @@
    TWA ดึงหน้าเว็บสด ไม่ได้ฝังโค้ดไว้ในตัว APK เวลาไล่บั๊กจึงต้องมีอะไร
    ยืนยันได้ว่าเครื่องนั้นได้ของใหม่แล้วจริง ไม่ใช่ค้างของเก่าอยู่
    *** แก้เลขนี้ทุกครั้งที่ push โค้ดขึ้น production *** */
-const APP_BUILD = 'b6';
+const APP_BUILD = 'b7';
 
 const $ = (id) => document.getElementById(id);
 
@@ -1414,6 +1414,19 @@ void recognizeSignFromVideo;
 buildBridgeBars();
 setStatus('ยังไม่เชื่อมต่อ', false);
 els.brandBuild.textContent = APP_BUILD;
+
+/* กันเหนียวคู่กับ muted บน <video id="signVideo">: บางเวอร์ชันของ Chrome
+   ยังลงทะเบียน media session ให้อยู่ดี ซึ่งทำให้คลิปภาษามือไปโผล่เป็น
+   ตัวเล่นเพลงบนแถบแจ้งเตือน และโดนสั่ง pause จากปุ่มบนแถบนั้นได้
+   แอปนี้ไม่มีอะไรที่ควรถูกควบคุมจาก media control ของระบบเลย */
+if ('mediaSession' in navigator) {
+  try {
+    navigator.mediaSession.metadata = null;
+    for (const action of ['play', 'pause', 'stop', 'previoustrack', 'nexttrack', 'seekbackward', 'seekforward', 'seekto']) {
+      navigator.mediaSession.setActionHandler(action, null);
+    }
+  } catch (_) { /* เบราว์เซอร์ที่ไม่รองรับบาง action — ข้ามไป */ }
+}
 
 if (!window.isSecureContext) {
   toast('หน้านี้เปิดแบบไม่ปลอดภัย — ใช้ http://localhost หรือ https เท่านั้น', 'warn', 8000);
