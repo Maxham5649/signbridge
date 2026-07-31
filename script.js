@@ -17,7 +17,7 @@
    TWA ดึงหน้าเว็บสด ไม่ได้ฝังโค้ดไว้ในตัว APK เวลาไล่บั๊กจึงต้องมีอะไร
    ยืนยันได้ว่าเครื่องนั้นได้ของใหม่แล้วจริง ไม่ใช่ค้างของเก่าอยู่
    *** แก้เลขนี้ทุกครั้งที่ push โค้ดขึ้น production *** */
-const APP_BUILD = 'b5';
+const APP_BUILD = 'b6';
 
 const $ = (id) => document.getElementById(id);
 
@@ -75,6 +75,8 @@ const els = {
   bridgeBars: $('bridgeBars'),
   roomInput: $('roomInput'),
   roleSelect: $('roleSelect'),
+  silentAudioToggle: $('silentAudioToggle'),
+  silentAudioRow: $('silentAudioRow'),
   joinBtn: $('joinBtn'),
   leaveBtn: $('leaveBtn'),
 
@@ -138,6 +140,7 @@ let voskFallbackPending = false; // true ระหว่างกำลังส
    (no-speech/aborted ก็ถูกกรองทิ้งที่ onerror ด้วย)
 
    จึงต้องดูจาก "ไม่มีผลลัพธ์" แทนที่จะรอ error code */
+let silentAudio = false; // true = เข้าห้องแบบไม่ให้ Jitsi จับไมค์ (ดู startSilent ใน joinRoom)
 let sttSawResult = false;      // เคยได้ผล (รวม interim) จาก Web Speech รอบนี้ไหม
 let webSpeechSilentRestarts = 0;
 let sttWatchdog = null;
@@ -956,11 +959,13 @@ function joinRoom(rawInput, role) {
   }
 
   localRole = role;
-  micOn = true;
+  // เปิดเฉพาะฝั่งผู้ได้ยิน และเฉพาะเมื่อผู้ใช้ไม่ได้สั่งปิดเอง
+  silentAudio = role === 'hearing' && els.silentAudioToggle.checked;
+  micOn = !silentAudio;
   camOn = true;
-  els.micBtn.setAttribute('aria-pressed', 'true');
+  els.micBtn.setAttribute('aria-pressed', String(micOn));
   els.camBtn.setAttribute('aria-pressed', 'true');
-  els.micLabel.textContent = 'ปิดไมค์';
+  els.micLabel.textContent = micOn ? 'ปิดไมค์' : 'เปิดไมค์';
   els.camLabel.textContent = 'ปิดกล้อง';
 
   setStatus('กำลังเชื่อมต่อ…', false);
@@ -976,6 +981,17 @@ function joinRoom(rawInput, role) {
       configOverwrite: {
         p2p: { enabled: false }, // ต้องปิด P2P ไม่งั้น sendEndpointTextMessage จะส่งไม่ถึงตอนคุยกัน 2 คน
         disableDeepLinking: true,
+
+        /* ฝั่งผู้ได้ยิน: ไม่ให้ Jitsi แตะไมค์เลย
+
+           ปลายทางเป็นคนหูหนวก เสียงดิบที่ส่งเข้าสายจึงไม่มีใครใช้ — สิ่งที่
+           ต้องส่งจริงคือ "ข้อความที่ถอดได้" ซึ่งไปทาง endpoint text message
+           อยู่แล้ว
+           พอ Jitsi ไม่ยึดไมค์ Web Speech ของ Chrome ก็เปิดไมค์ได้ตามปกติ
+           แก้อาการบน Android ที่ Google speech service (คนละ process กับ
+           Chrome) เปิดไมค์ไม่ได้เพราะ Chrome ถืออยู่
+           (บนคอมไม่เคยเจอปัญหานี้ เพราะ Chrome desktop ถอดเสียงในตัวเอง) */
+        startSilent: silentAudio,
         // หมายเหตุ: เคยลองบังคับปิดหน้า prejoin ("Join meeting") ของ Jitsi
         // แต่บน meet.jit.si สาธารณะทำให้ conference join พังด้วย
         // "connectionError.membersOnly" (เข้าไม่ได้เพราะติด lobby) — ปล่อยให้
@@ -1100,6 +1116,8 @@ function syncSignPanelVisibility() {
 
 els.roleSelect.addEventListener('change', () => {
   syncSignPanelVisibility();
+  // สวิตช์ "ไม่ส่งเสียงเข้าสาย" มีผลกับฝั่งผู้ได้ยินเท่านั้น
+  els.silentAudioRow.hidden = els.roleSelect.value !== 'hearing';
   if (els.roleSelect.value === 'deaf') renderTrainedList();
 });
 

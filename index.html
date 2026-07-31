@@ -51,6 +51,11 @@
       <button type="button" id="joinBtn">เข้าร่วมห้อง</button>
       <button type="button" id="leaveBtn" class="btn-ghost" disabled>ออกจากห้อง</button>
     </div>
+    <!-- ฝั่งผู้ได้ยินบนมือถือ: ต้องไม่ให้ Jitsi ยึดไมค์ ไม่งั้น Chrome ถอดเสียงไม่ได้ -->
+    <label class="join-check" id="silentAudioRow">
+      <input type="checkbox" id="silentAudioToggle" checked>
+      <span>ไม่ส่งเสียงเข้าสาย — ปล่อยไมค์ให้ระบบถอดเสียง <b>(จำเป็นบนมือถือ)</b></span>
+    </label>
     <p class="join-hint" id="joinHint">พิมพ์ชื่อห้องอะไรก็ได้ (หรือวางลิงก์ meet.jit.si) แล้วกด "เข้าร่วมห้อง" — เปิดชื่อห้องเดียวกันบนอีกอุปกรณ์ แล้วเลือกบทบาทให้ตรงข้ามกัน ไม่ต้องสมัครสมาชิก · <a class="join-hint-link" href="download.html">ติดตั้งเป็นแอพบน Android</a></p>
   </section>
 
