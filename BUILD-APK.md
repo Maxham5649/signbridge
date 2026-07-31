@@ -138,22 +138,33 @@ npx --yes @bubblewrap/cli@latest updateConfig --jdkPath "C:\Users\user\.bubblewr
 
 ## ขั้นตอนที่ 3.5 — build APK (ต้องรันเอง เพราะต้องตั้งรหัส keystore)
 
+### สร้าง keystore ก่อน — `bubblewrap build` ไม่สร้างให้
+
+`createSigningKey()` อยู่ใน `init.js` เท่านั้น ส่วน `build` แค่ถามรหัสแล้วเรียก
+apksigner เลย ถ้ายังไม่มีไฟล์ keystore จะพังท้ายสุดด้วย
+`java.io.FileNotFoundException: ...android.keystore`
+
+```bash
+& "C:\Users\user\.bubblewrap\jdk-x64\jdk-17.0.11+9\bin\keytool.exe" -genkeypair -v -keystore "C:\Users\user\Desktop\App\twa\android.keystore" -alias android -keyalg RSA -keysize 2048 -validity 10000
+```
+
+`keytool` **ไม่โชว์อะไรเลยตอนพิมพ์รหัส** ไม่มีแม้แต่ `*` — พิมพ์ต่อแล้วกด Enter ได้เลย
+Country code ตอบ `TH`, ยืนยันตอบ `yes`, ถามรหัส key ให้กด Enter เฉย ๆ (ใช้รหัสเดียวกับ keystore)
+
+### แล้วค่อย build
+
 ```bash
 cd /c/Users/user/Desktop/App/twa && npx --yes @bubblewrap/cli@latest build
 ```
 
-ครั้งแรกมันจะถามสร้าง keystore ใหม่ ตอบตามนี้:
+ถามรหัส 2 ครั้ง ใส่รหัสเดียวกันทั้งคู่
 
-| คำถาม | ตอบ |
-|---|---|
-| `Do you want to create one now?` (signing key) | `Y` |
-| First and Last names / Organization / Country | ใส่อะไรก็ได้ (ไม่มีผลกับการทำงาน) |
-| **Password for the Key Store** | ตั้งเอง |
-| **Password for the Key** | ตั้งเอง (ใช้อันเดียวกันได้) |
-
-> 🔑 **จดรหัสทั้งสองไว้ให้ดี และเก็บไฟล์ `twa/android.keystore` ไว้**
+> 🔑 **จดรหัสไว้ และก๊อป `twa/android.keystore` ไปเก็บที่อื่นด้วย**
 > ถ้าหาย = อัปเดตแอพตัวเดิมไม่ได้อีกเลย ต้องเปลี่ยน package ID เป็นแอพใหม่
-> อย่าเก็บลง git (`.gitignore` กันไว้แล้ว) — ก๊อปไปเก็บที่อื่นด้วย
+> `.gitignore` กัน keystore ไว้แล้ว
+>
+> ⚠️ `bubblewrap build` ส่งรหัสผ่านเป็น plaintext บน command line ของ apksigner
+> (`--ks-pass pass:"..."`) รหัสจะค้างใน terminal scrollback — ปิดหน้าต่างทิ้งหลัง build เสร็จ
 
 ได้ไฟล์:
 - `app-release-signed.apk` ← **ตัวนี้คือ APK ที่เอาไปลงมือถือได้เลย**
