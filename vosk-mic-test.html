@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ทดสอบเปิดไมค์แยก ระหว่างอยู่ในคอล Jitsi</title>
+<style>
+  body { font-family: sans-serif; max-width: 480px; margin: 20px auto; padding: 0 16px; background:#EFF4FC; color:#0B1B33; }
+  h1 { font-size: 1.1rem; }
+  ol { padding-left: 20px; font-size: 0.92rem; line-height: 1.6; }
+  #jitsiBox { width: 100%; aspect-ratio: 4/3; background:#0B1B33; border-radius: 12px; margin: 12px 0; }
+  button { display:block; width:100%; padding: 14px; margin: 8px 0; border:none; border-radius: 10px; font-size:1rem; font-weight:600; cursor:pointer; }
+  #joinBtn { background:#1C5DFA; color:#fff; }
+  #testBtn { background:#05C7B8; color:#04302C; }
+  #testBtn:disabled { opacity:0.4; cursor:not-allowed; }
+  #result { margin-top:12px; padding:14px; border-radius:10px; font-size:1rem; font-weight:600; white-space:pre-wrap; min-height: 3em; }
+  .r-info { background:#E8F0FE; color:#123FAE; }
+  .r-ok { background:#E4F7EE; color:#1FAE6B; }
+  .r-error { background:#FCEAE8; color:#E4483A; }
+</style>
+</head>
+<body>
+
+<h1>ทดสอบ: เปิดไมค์แยกได้ไหมตอนอยู่ในคอล Jitsi (มือถือ)</h1>
+<ol>
+  <li>กด "เข้าห้องทดสอบ" ด้านล่าง (จะเข้าห้อง Jitsi จริง ไม่ต้องมีคนอื่นก็ทดสอบได้)</li>
+  <li>อนุญาตสิทธิ์กล้อง/ไมค์ให้ Jitsi ตามปกติ กด "Join meeting" ในกรอบถ้าขึ้นมา</li>
+  <li>พอเข้าห้องแล้ว ปุ่ม "ทดสอบเปิดไมค์แยก" จะกดได้ — กดเลย</li>
+  <li>ดูผลลัพธ์ด้านล่าง แล้วส่งข้อความที่ขึ้นมาทั้งหมดกลับมาบอก</li>
+</ol>
+
+<button id="joinBtn" type="button">เข้าห้องทดสอบ</button>
+<div id="jitsiBox"></div>
+<button id="testBtn" type="button" disabled>ทดสอบเปิดไมค์แยก</button>
+
+<div id="result" class="r-info">ยังไม่ได้ทดสอบ</div>
+
+<script src="https://meet.jit.si/external_api.js"></script>
+<script>
+  const joinBtn = document.getElementById('joinBtn');
+  const testBtn = document.getElementById('testBtn');
+  const resultEl = document.getElementById('result');
+  let jitsiApi = null;
+
+  function setResult(text, kind) {
+    resultEl.textContent = text;
+    resultEl.className = 'r-' + kind;
+  }
+
+  joinBtn.addEventListener('click', () => {
+    joinBtn.disabled = true;
+    const roomName = 'signbridge-mictest-' + Date.now();
+    jitsiApi = new JitsiMeetExternalAPI('meet.jit.si', {
+      roomName,
+      parentNode: document.getElementById('jitsiBox'),
+      width: '100%',
+      height: '100%',
+      configOverwrite: { p2p: { enabled: false }, disableDeepLinking: true },
+    });
+    jitsiApi.addEventListener('videoConferenceJoined', () => {
+      testBtn.disabled = false;
+      setResult('เข้าห้องแล้ว (ไมค์ Jitsi กำลังเปิดอยู่) — กดปุ่ม "ทดสอบเปิดไมค์แยก" ได้เลย', 'info');
+    });
+  });
+
+  testBtn.addEventListener('click', async () => {
+    setResult('กำลังทดสอบเปิดไมค์แยก...', 'info');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true },
+      });
+      stream.getTracks().forEach((t) => t.stop());
+      setResult('✅ สำเร็จ! เปิดไมค์แยกได้ระหว่างอยู่ในคอล Jitsi — แปลว่าแนวทาง Vosk (โมเดลรันในเบราว์เซอร์) มีสิทธิ์ใช้ได้จริง ไปขั้นต่อไปได้', 'ok');
+    } catch (err) {
+      setResult('❌ ล้มเหลว: ' + err.name + ' — ' + err.message + '\n\nแปลว่าเปิดไมค์ 2 ตัวพร้อมกันไม่ได้จริง ๆ บนเครื่องนี้ (ไม่ใช่แค่ Chrome บล็อกเฉพาะ speech service ของ Google) — แนวทาง Vosk ก็จะเจอปัญหาเดิม ต้องใช้ทางอื่นแทน', 'error');
+    }
+  });
+</script>
+
+</body>
+</html>

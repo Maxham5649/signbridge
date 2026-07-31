@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SignBridge — วิดีโอคอลสำหรับคนหูหนวกและคนได้ยิน</title>
+
+<!-- PWA: ต้องมีเพื่อให้ติดตั้งลงเครื่องได้ และเพื่อให้ Bubblewrap ห่อเป็น APK (TWA) ได้ -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1C5DFA">
+<meta name="description" content="วิดีโอคอลพร้อมคำแปลสองทาง: ภาษามือ ↔ เสียงพูด สำหรับคนหูหนวกและคนได้ยิน">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SignBridge">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===== Header ===== -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">SignBridge</span>
+    </div>
+    <div class="call-status" id="callStatus">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">ยังไม่เชื่อมต่อ</span>
+      <span class="call-timer" id="callTimer">00:00</span>
+    </div>
+  </header>
+
+  <!-- ===== แถบเข้าร่วมห้อง Jitsi Meet ===== -->
+  <section class="join-bar" id="joinBar">
+    <div class="join-row">
+      <input type="text" id="roomInput" placeholder="ชื่อห้อง เช่น signbridge-2026 หรือวางลิงก์ https://meet.jit.si/ชื่อห้อง" autocomplete="off">
+      <select id="roleSelect" aria-label="เลือกบทบาทของคุณในสาย">
+        <option value="hearing">ฉันคือฝั่งผู้ได้ยิน</option>
+        <option value="deaf">ฉันคือฝั่งผู้หูหนวก</option>
+      </select>
+      <button type="button" id="joinBtn">เข้าร่วมห้อง</button>
+      <button type="button" id="leaveBtn" class="btn-ghost" disabled>ออกจากห้อง</button>
+    </div>
+    <p class="join-hint" id="joinHint">พิมพ์ชื่อห้องอะไรก็ได้ (หรือวางลิงก์ meet.jit.si) แล้วกด "เข้าร่วมห้อง" — เปิดชื่อห้องเดียวกันบนอีกอุปกรณ์ แล้วเลือกบทบาทให้ตรงข้ามกัน ไม่ต้องสมัครสมาชิก</p>
+  </section>
+
+  <!-- ===== Stage ===== -->
+  <main class="stage">
+
+    <!-- แถวบน: วิดีโอคอล Jitsi Meet (รวมทั้งสองฝั่งในกรอบเดียว) -->
+    <section class="video-stage" id="videoStage" aria-label="วิดีโอคอล">
+      <div id="jitsiContainer"></div>
+      <div class="video-empty" id="videoStageEmpty">
+        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 8l5-3v14l-5-3M4 6h9a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z"/></svg>
+        <p>กรอกชื่อห้องด้านบนแล้วกด "เข้าร่วมห้อง" เพื่อเริ่มวิดีโอคอล</p>
+      </div>
+      <button type="button" class="video-expand-btn" id="videoExpandBtn" aria-pressed="false" aria-label="ขยายวิดีโอให้ใหญ่ขึ้น">⤢</button>
+    </section>
+
+    <!-- แถวล่าง: กล่องคำแปลสองทาง -->
+    <div class="caption-row">
+
+      <!-- ฝั่งซ้าย: คำแปลจากภาษามือ -->
+      <section class="panel panel-hearing" aria-label="กล่องคำแปลฝั่งผู้ได้ยิน">
+        <div class="caption-box">
+          <div class="box-header">
+            <span class="box-icon" aria-hidden="true">≈</span>
+            <span>คำแปลภาษามือ · Sign → ข้อความ</span>
+            <span class="box-badge" id="ttsBadge" hidden>อ่านออกเสียง</span>
+          </div>
+          <div class="box-body">
+            <ul class="msg-list" id="signToTextList" aria-live="polite">
+              <li class="msg-empty" id="signToTextOutput">รอสัญญาณภาษามือจากอีกฝั่ง…</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ตัวเชื่อมกลาง: signature element -->
+      <div class="bridge" aria-hidden="true">
+        <div class="bridge-bars" id="bridgeBars"></div>
+        <span class="bridge-label">AI แปลสองทาง</span>
+      </div>
+
+      <!-- ฝั่งขวา: เสียงพูดแปลเป็นภาษามือ -->
+      <section class="panel panel-deaf" aria-label="กล่องภาษามือฝั่งผู้หูหนวก">
+        <div class="sign-box">
+          <div class="box-header">
+            <span class="box-icon" aria-hidden="true">▶</span>
+            <span>ภาษามือ · เสียงพูด → Sign</span>
+            <span class="box-badge" id="sttBadge" hidden>กำลังฟัง</span>
+          </div>
+          <div class="sign-player" id="signPlayer">
+            <video class="sign-video" id="signVideo" playsinline hidden></video>
+            <div class="sign-avatar" id="signAvatar">
+              <svg viewBox="0 0 100 100" width="72" height="72" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="50" cy="30" r="16"/>
+                <path d="M20 90c0-22 13-38 30-38s30 16 30 38"/>
+                <path id="handL" d="M22 62 L8 48" stroke-linecap="round"/>
+                <path id="handR" d="M78 62 L92 48" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <p class="sign-caption" id="signCaption">รอเสียงพูดจากฝั่งผู้ได้ยิน</p>
+            <p class="sign-interim" id="signInterim" aria-live="polite"></p>
+          </div>
+
+          <!-- จดจำท่าภาษามือจากกล้อง (Phase 2) — โชว์เฉพาะบทบาท "ผู้หูหนวก" -->
+          <div class="sign-input-panel" id="signInputPanel" hidden>
+            <div class="sign-input-header">
+              <span class="sign-input-title">จดจำท่าภาษามือ (กล้องแยก)</span>
+              <button type="button" id="signCamToggleBtn" class="sign-cam-toggle">เปิดกล้อง</button>
+            </div>
+            <div class="sign-input-body" id="signInputBody" hidden>
+              <div class="sign-cam-preview-wrap">
+                <video class="sign-cam-preview" id="signCamPreview" playsinline muted hidden></video>
+                <span class="sign-hand-badge" id="signHandBadge" hidden>ไม่เจอมือ</span>
+              </div>
+
+              <div class="sign-input-tabs">
+                <button type="button" class="sign-tab is-active" id="signTabRecognize" data-mode="recognize">ใช้งานจริง</button>
+                <button type="button" class="sign-tab" id="signTabTrain" data-mode="train">ฝึกสอน</button>
+              </div>
+
+              <div class="sign-recognize-mode" id="signRecognizeMode">
+                <button type="button" class="sign-hold-btn" id="signRecognizeBtn">กดค้าง แล้วทำท่า</button>
+                <p class="sign-input-hint" id="signRecognizeResult">ยังไม่ได้ฝึกสอนท่าไหนเลย</p>
+              </div>
+
+              <div class="sign-train-mode" id="signTrainMode" hidden>
+                <input type="text" id="signTrainLabel" class="sign-train-label" placeholder="ชื่อคำ/วลี เช่น สวัสดี" autocomplete="off">
+                <button type="button" class="sign-hold-btn" id="signTrainBtn">กดค้าง แล้วอัดท่านี้</button>
+                <p class="sign-input-hint" id="signTrainHint">พิมพ์ชื่อคำก่อน แล้วกดปุ่มค้างขณะทำท่า ทำซ้ำ 3-5 ครั้งต่อคำ</p>
+                <ul class="sign-trained-list" id="signTrainedList"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ===== ช่องพิมพ์: ทางลัดระหว่างที่โมเดล AI ยังแปลไม่ครบ ===== -->
+  <section class="composer" id="composer" hidden>
+    <label class="composer-label" id="composerLabel" for="composerInput">พิมพ์ข้อความ</label>
+    <div class="composer-row">
+      <input type="text" id="composerInput" placeholder="พิมพ์แล้วกด Enter เพื่อส่งไปอีกฝั่ง" autocomplete="off" disabled>
+      <button type="button" id="composerSend" disabled>ส่ง</button>
+    </div>
+  </section>
+
+  <!-- ===== ส่วนควบคุม ===== -->
+  <footer class="controls">
+    <button type="button" class="ctrl-btn" id="micBtn" aria-pressed="true" disabled>
+      <span class="ctrl-icon" id="micIcon">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 15a3 3 0 003-3V6a3 3 0 10-6 0v6a3 3 0 003 3z"/><path d="M19 11a7 7 0 01-14 0M12 19v3"/></svg>
+      </span>
+      <span class="ctrl-label" id="micLabel">ปิดไมค์</span>
+    </button>
+
+    <button type="button" class="ctrl-btn" id="camBtn" aria-pressed="true" disabled>
+      <span class="ctrl-icon" id="camIcon">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 8l5-3v14l-5-3M4 6h9a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2z"/></svg>
+      </span>
+      <span class="ctrl-label" id="camLabel">ปิดกล้อง</span>
+    </button>
+
+    <button type="button" class="ctrl-btn ctrl-end" id="endBtn" disabled>
+      <span class="ctrl-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5c6-4.5 12-4.5 18 0v3.2l-4.2 1-1-3a12 12 0 00-7.6 0l-1 3-4.2-1z"/></svg>
+      </span>
+      <span class="ctrl-label">วางสาย</span>
+    </button>
+  </footer>
+
+  <div class="toast-stack" id="toastStack" aria-live="assertive"></div>
+
+</div>
+
+<!-- Jitsi Meet IFrame API, คลังคำศัพท์ภาษามือ, ระบบจดจำท่า ต้องมาก่อน script.js เสมอ -->
+<script src="https://meet.jit.si/external_api.js"></script>
+<script src="signVocab.js"></script>
+<script src="signRecognition.js"></script>
+<script src="script.js"></script>
+
+<!-- ลงทะเบียน service worker — ต้องมีเพื่อให้ติดตั้งเป็นแอพได้ (ทำงานเฉพาะบน https/localhost) -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch((err) => {
+      console.warn('service worker register failed:', err);
+    });
+  });
+}
+</script>
+
+</body>
+</html>

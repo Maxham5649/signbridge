@@ -1,0 +1,871 @@
+:root {
+  --bg: #EFF4FC;
+  --surface: #FFFFFF;
+  --primary: #1C5DFA;
+  --primary-dark: #123FAE;
+  --primary-light: #E8F0FE;
+  --accent: #05C7B8;
+  --text: #0B1B33;
+  --text-muted: #5B6B85;
+  --danger: #E4483A;
+  --danger-light: #FCEAE8;
+  --warn: #B7791F;
+  --warn-light: #FDF3E0;
+  --success: #1FAE6B;
+  --success-light: #E4F7EE;
+  --border: #DCE6F5;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+  --shadow: 0 8px 24px rgba(18, 63, 174, 0.08);
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body { overflow-x: hidden; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  background-image: radial-gradient(circle at 10% 0%, #E4EDFE 0%, transparent 45%),
+                     radial-gradient(circle at 100% 100%, #E1FBF8 0%, transparent 40%);
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+button { font-family: inherit; }
+:focus-visible { outline: 2.5px solid var(--primary); outline-offset: 2px; }
+
+.app {
+  max-width: 1280px;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px 110px;
+  gap: 18px;
+}
+
+/* ===== Topbar ===== */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.brand { display: flex; align-items: center; gap: 10px; }
+
+.brand-mark {
+  width: 30px; height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+}
+
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+}
+
+.call-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  box-shadow: var(--shadow);
+}
+
+.status-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 4px rgba(31,174,107,0.15);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.call-timer {
+  font-family: var(--font-mono);
+  color: var(--primary-dark);
+  font-weight: 500;
+}
+
+/* ===== Join bar ===== */
+.join-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.join-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.join-row input[type="text"] {
+  flex: 1 1 260px;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  color: var(--text);
+  background: var(--bg);
+}
+
+.join-row select {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--surface);
+  max-width: 100%;
+}
+
+.join-row button {
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.join-row button:hover:not(:disabled) { background: var(--primary-dark); }
+
+.join-row .btn-ghost {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+.join-row button:disabled,
+.join-row input:disabled,
+.join-row select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.join-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+@media (max-width: 480px) {
+  .join-row { flex-direction: column; }
+  /* .join-row input[type="text"] ตั้ง flex: 1 1 260px ไว้สำหรับ layout
+     แนวนอน (260px คือ flex-basis ของ "ความกว้าง") — พอสลับเป็นแนวตั้ง
+     ที่ breakpoint นี้ flex-basis จะกลายเป็นแกนหลัก (ความสูง) แทน ทำให้
+     ช่องกรอกชื่อห้องบวมสูงถึง 260px ต้องรีเซ็ตเป็น auto ไม่งั้น flex-basis
+     จะชนะ height ที่ตั้งไว้เสมอตามสเปก flexbox */
+  .join-row input, .join-row select, .join-row button {
+    width: 100%;
+  }
+  /* ต้องชนกับ .join-row input[type="text"] ตรง ๆ (specificity เท่ากัน
+     แต่มาทีหลังในไฟล์เลยชนะ) ไม่งั้น flex: 1 1 260px ของกฎเดิมจะยังชนะ
+     เพราะ [type="text"] ทำให้กฎนั้น specific กว่ากฎข้างบนนี้ */
+  .join-row input[type="text"] {
+    flex: 1 1 auto;
+  }
+}
+
+/* ===== Stage ===== */
+.stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.video-stage {
+  position: relative;
+  width: 100%;
+  background: #0B1B33;
+  border-radius: var(--radius-lg);
+  aspect-ratio: 16 / 9;
+  min-height: 300px;
+  max-height: 560px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+#jitsiContainer,
+#jitsiContainer iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+
+.video-expand-btn {
+  display: none;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: rgba(11, 27, 51, 0.55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.caption-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 18px;
+  align-items: stretch;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.video-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #7C93C9;
+  text-align: center;
+  padding: 12px;
+}
+
+/* .video-empty ตั้ง display:flex ไว้เสมอ ต้องมีกฎนี้แยกเพื่อให้ attribute
+   hidden ทำงานจริง ไม่งั้นจะทับ iframe ของ Jitsi และดักคลิกทั้งหมดไว้แม้
+   จะมองไม่เห็น (สไตล์ชีตของหน้าเว็บชนะกฎ [hidden] ของเบราว์เซอร์เสมอ) */
+.video-empty[hidden] { display: none; }
+
+.video-empty p { margin: 0; font-size: 0.85rem; }
+
+/* ===== Caption / Sign boxes ===== */
+.caption-box, .sign-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+}
+
+.box-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--primary-dark);
+  background: var(--primary-light);
+  border-bottom: 1px solid var(--border);
+}
+
+.box-icon { color: var(--accent); font-size: 1rem; }
+
+.box-badge {
+  margin-left: auto;
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #04302C;
+  background: var(--accent);
+  padding: 3px 9px;
+  border-radius: 999px;
+  animation: badge-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.box-body {
+  padding: 8px 0;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* ===== รายการข้อความแปล ===== */
+.msg-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 16px;
+  flex: 1;
+  overflow-y: auto;
+  max-height: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scrollbar-width: thin;
+}
+
+.msg-empty {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: auto 0;
+}
+
+.msg {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  animation: msg-in 0.22s ease-out;
+}
+
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.msg-time {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.msg-text {
+  font-size: 1.02rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.sign-player {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+  background:
+    repeating-linear-gradient(135deg, #F7FAFF 0 10px, #F1F6FE 10px 20px);
+}
+
+.sign-video {
+  width: 100%;
+  max-width: 220px;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-md);
+  background: #0B1B33;
+  object-fit: cover;
+  box-shadow: var(--shadow);
+}
+
+/* เหมือน .video-empty — ต้องมีกฎนี้แยก ไม่งั้น [hidden] จะถูกสไตล์อื่นทับ */
+.sign-video[hidden] { display: none; }
+
+.sign-avatar {
+  width: 96px; height: 96px;
+  border-radius: 50%;
+  background: var(--primary-light);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: box-shadow 0.2s ease;
+}
+
+.sign-avatar[hidden] { display: none; }
+
+.sign-avatar.is-playing {
+  box-shadow: 0 0 0 6px rgba(5,199,184,0.18);
+}
+
+.sign-avatar.is-playing #handL,
+.sign-avatar.is-playing #handR {
+  animation: wave 0.6s ease-in-out infinite alternate;
+}
+
+.sign-avatar.is-playing #handR { animation-delay: 0.15s; }
+
+@keyframes wave {
+  from { transform: rotate(0deg); transform-origin: 60% 40%; }
+  to   { transform: rotate(-18deg); transform-origin: 60% 40%; }
+}
+
+.sign-caption {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--text);
+  max-width: 34ch;
+}
+
+.sign-interim {
+  margin: 0;
+  min-height: 1.2em;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ===== จดจำท่าภาษามือจากกล้อง (Phase 2) ===== */
+.sign-input-panel {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sign-input-panel[hidden] { display: none; }
+
+.sign-input-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sign-input-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--primary-dark);
+}
+
+.sign-cam-toggle {
+  border: none;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sign-cam-toggle[aria-pressed="true"] {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.sign-input-body[hidden] { display: none; }
+
+.sign-input-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sign-input-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.sign-tab {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sign-tab.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.sign-recognize-mode,
+.sign-train-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sign-recognize-mode[hidden],
+.sign-train-mode[hidden] { display: none; }
+
+.sign-hold-btn {
+  border: none;
+  background: var(--accent);
+  color: #04302C;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+}
+
+.sign-hold-btn.is-holding {
+  background: var(--danger);
+  color: #fff;
+}
+
+.sign-input-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.sign-train-label {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.sign-trained-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.sign-trained-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+}
+
+.sign-trained-item button {
+  border: none;
+  background: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* ===== Bridge (signature element) ===== */
+.bridge {
+  width: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.bridge-bars {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  height: 60px;
+}
+
+.bridge-bars span {
+  width: 4px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, var(--primary), var(--accent));
+  animation: bar-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes bar-pulse {
+  0%, 100% { height: 10px; opacity: 0.55; }
+  50% { height: 42px; opacity: 1; }
+}
+
+.bridge-label {
+  writing-mode: vertical-rl;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+}
+
+/* ===== Composer ===== */
+.composer {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.composer-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary-dark);
+}
+
+.composer-row {
+  display: flex;
+  gap: 10px;
+}
+
+.composer-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-family: var(--font-body);
+  color: var(--text);
+  background: var(--bg);
+}
+
+.composer-row button {
+  border: none;
+  background: var(--accent);
+  color: #04302C;
+  padding: 11px 22px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.composer-row button:hover:not(:disabled) { filter: brightness(0.94); }
+
+.composer-row input:disabled,
+.composer-row button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ===== Controls ===== */
+.controls {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 10px;
+  border-radius: 999px;
+  box-shadow: 0 12px 32px rgba(18,63,174,0.14);
+  z-index: 60;
+}
+
+.ctrl-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  cursor: pointer;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  padding: 12px 18px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.ctrl-btn:hover:not(:disabled) { transform: translateY(-1px); }
+.ctrl-btn:active:not(:disabled) { transform: translateY(0); }
+
+.ctrl-btn[aria-pressed="false"] {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.ctrl-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ctrl-end {
+  background: var(--danger);
+  color: #fff;
+  padding: 12px 22px;
+}
+
+.ctrl-end:hover:not(:disabled) { background: #C7392D; }
+
+.ctrl-label { white-space: nowrap; }
+
+/* ===== Toast ===== */
+.toast-stack {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 70;
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.toast {
+  padding: 11px 15px;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  box-shadow: 0 10px 28px rgba(18,63,174,0.16);
+  animation: toast-in 0.22s ease-out;
+}
+
+.toast.is-out { opacity: 0; transition: opacity 0.25s ease; }
+
+.toast-ok { border-left-color: var(--success); background: var(--success-light); }
+.toast-warn { border-left-color: var(--warn); background: var(--warn-light); }
+.toast-error { border-left-color: var(--danger); background: var(--danger-light); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 860px) {
+  .caption-row { grid-template-columns: 1fr; }
+
+  /* กันช่องกรอกชื่อห้อง/ช่องพิมพ์ข้อความบวมสูงผิดปกติบนมือถือบางรุ่น
+     (line-height/ฟอนต์สำรองก่อนโหลดเว็บฟอนต์เสร็จ หรือลิสต์ autofill
+     ของเบราว์เซอร์) — ล็อกความสูงไว้ตรง ๆ ไม่ปล่อยให้คำนวณเอง */
+  .join-row input[type="text"],
+  .join-row select {
+    height: 44px;
+    line-height: 1.3;
+    font-size: 16px;
+  }
+
+  .join-row button {
+    height: 44px;
+  }
+
+  .composer-row input {
+    height: 44px;
+    line-height: 1.3;
+    font-size: 16px;
+  }
+
+  .composer-row button {
+    height: 44px;
+  }
+
+  /* จอมือถือแนวตั้งแคบ ๆ ทำให้กล่องวิดีโอสูงไม่พอสำหรับหน้า prejoin
+     ของ Jitsi (โลโก้ + ฟอร์ม + คำเตือน + checkbox + แถวเช็คอุปกรณ์)
+     ปุ่ม "Join meeting" เลยโดนตัดจนกดไม่ถึง — ใช้ความสูงอิงหน้าจอแทน
+     aspect-ratio คงที่ */
+  .video-stage {
+    aspect-ratio: auto;
+    height: min(70vh, 480px);
+    min-height: 340px;
+    max-height: none;
+  }
+
+  .video-expand-btn { display: flex; }
+
+  .bridge {
+    width: 100%;
+    flex-direction: row;
+    padding: 4px 0;
+  }
+  .bridge-bars { height: 28px; flex-direction: row; }
+  .bridge-bars span { width: 3px; }
+  .bridge-label { writing-mode: horizontal-tb; }
+  .app { padding-bottom: 120px; }
+  .msg-list { max-height: 200px; }
+
+  /* โหมดขยายวิดีโอ: ปักวิดีโอไว้บน ~60% ของจอ ส่วนกล่องคำแปลอยู่ด้านล่าง
+     แบบ fixed ทั้งคู่ เพื่อให้เห็นวิดีโอใหญ่ขึ้นแต่ยังเห็นคำแปลพร้อมกัน */
+  html.video-expanded,
+  body.video-expanded { overflow: hidden; }
+
+  body.video-expanded .video-stage {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    width: 100%;
+    height: 60vh;
+    max-height: none;
+    min-height: 0;
+    border-radius: 0;
+    z-index: 40;
+  }
+
+  body.video-expanded .caption-row {
+    position: fixed;
+    top: 60vh; left: 0; right: 0; bottom: 0;
+    margin: 0;
+    padding: 12px 12px 90px;
+    overflow-y: auto;
+    background: var(--bg);
+    grid-template-columns: 1fr;
+    z-index: 40;
+  }
+}
+
+@media (max-width: 480px) {
+  .app { padding: 16px 14px 120px; }
+  .ctrl-label { display: none; }
+  .ctrl-btn { padding: 14px; }
+  .ctrl-end { padding: 14px 18px; }
+  .call-status { font-size: 0.75rem; }
+  .toast-stack { left: 16px; right: 16px; max-width: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-dot, .bridge-bars span, .box-badge,
+  .sign-avatar.is-playing #handL, .sign-avatar.is-playing #handR,
+  .msg, .toast {
+    animation: none !important;
+  }
+}
