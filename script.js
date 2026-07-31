@@ -17,7 +17,7 @@
    TWA ดึงหน้าเว็บสด ไม่ได้ฝังโค้ดไว้ในตัว APK เวลาไล่บั๊กจึงต้องมีอะไร
    ยืนยันได้ว่าเครื่องนั้นได้ของใหม่แล้วจริง ไม่ใช่ค้างของเก่าอยู่
    *** แก้เลขนี้ทุกครั้งที่ push โค้ดขึ้น production *** */
-const APP_BUILD = 'b7';
+const APP_BUILD = 'b8';
 
 const $ = (id) => document.getElementById(id);
 
@@ -474,11 +474,34 @@ function deliver(dir, text) {
   if (speakHere) speakThai(text);
 }
 
+/* รหัสประจำเครื่อง/แท็บนี้ สุ่มใหม่ทุกครั้งที่โหลดหน้า
+   ใช้แยกว่าข้อความที่เข้ามาเป็นของเราเองที่เด้งกลับมาหรือของอีกฝั่งจริง ๆ */
+const SESSION_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+/* กันเล่นซ้ำ: ถ้าประโยคเดิมมาอีกรอบภายในเวลาสั้น ๆ ให้ทิ้ง
+   นอกจากเคส echo แล้ว Web Speech เองก็ยิง final ซ้ำได้เวลา recognizer
+   เริ่มรอบใหม่คาบเกี่ยวกับรอบเดิม */
+const DEDUPE_WINDOW_MS = 1500;
+let lastDelivered = { key: '', at: 0 };
+
+function isDuplicate(dir, text) {
+  const key = `${dir}|${text}`;
+  const now = Date.now();
+  if (key === lastDelivered.key && now - lastDelivered.at < DEDUPE_WINDOW_MS) return true;
+  lastDelivered = { key, at: now };
+  return false;
+}
+
 function broadcast(dir, text) {
+  if (isDuplicate(dir, text)) return;
   deliver(dir, text);
   if (jitsiApi && inCall) {
     try {
-      jitsiApi.executeCommand('sendEndpointTextMessage', '', JSON.stringify({ k: 'sb', dir, text }));
+      jitsiApi.executeCommand(
+        'sendEndpointTextMessage',
+        '',
+        JSON.stringify({ k: 'sb', dir, text, s: SESSION_ID })
+      );
     } catch (err) {
       console.error('sendEndpointTextMessage failed:', err);
     }
@@ -892,6 +915,10 @@ function handleEndpointTextMessage(ev) {
     if (!raw) return;
     const d = JSON.parse(raw);
     if (!d || d.k !== 'sb') return;
+    // ข้อความของเราเองที่ Jitsi เด้งกลับมา — broadcast() เล่นให้ที่เครื่อง
+    // ตัวเองไปแล้วตอนส่ง ถ้าเล่นตรงนี้อีกคลิปจะขึ้นสองรอบ
+    if (d.s && d.s === SESSION_ID) return;
+    if (isDuplicate(d.dir, d.text)) return;
     deliver(d.dir, d.text);
   } catch (err) {
     console.warn('bad endpoint text message:', err);
