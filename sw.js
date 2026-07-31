@@ -12,7 +12,7 @@
      ตอน dev ที่ยังมี signs/1.mp4 อยู่ในเครื่อง
    ========================================================== */
 
-const VERSION = 'signbridge-v3';
+const VERSION = 'signbridge-v5';
 const SHELL_CACHE = `${VERSION}-shell`;
 const MEDIA_CACHE = `${VERSION}-media`;
 
@@ -92,8 +92,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // วิดีโอภาษามือ: แคชก่อน (ไฟล์ใหญ่ ไม่เปลี่ยนบ่อย)
-  if (url.pathname.endsWith('.mp4')) {
+  // โมเดลถอดเสียง + วิดีโอภาษามือ: แคชก่อน (ไฟล์ใหญ่ ไม่เปลี่ยนบ่อย)
+  // โมเดล 84MB ต้องโหลดครั้งเดียวจบ ไม่ใช่ทุกครั้งที่เปิดแอป
+  if (url.pathname.endsWith('.mp4') || url.pathname.endsWith('.zip')) {
     event.respondWith(
       (async () => {
         const cached = await caches.match(req);

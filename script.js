@@ -13,6 +13,12 @@
 
 'use strict';
 
+/* เลขชุดโค้ด — โชว์ข้าง ๆ ชื่อแอปบนจอ
+   TWA ดึงหน้าเว็บสด ไม่ได้ฝังโค้ดไว้ในตัว APK เวลาไล่บั๊กจึงต้องมีอะไร
+   ยืนยันได้ว่าเครื่องนั้นได้ของใหม่แล้วจริง ไม่ใช่ค้างของเก่าอยู่
+   *** แก้เลขนี้ทุกครั้งที่ push โค้ดขึ้น production *** */
+const APP_BUILD = 'b5';
+
 const $ = (id) => document.getElementById(id);
 
 const els = {
@@ -38,6 +44,12 @@ const els = {
   signInterim: $('signInterim'),
   sttBadge: $('sttBadge'),
   ttsBadge: $('ttsBadge'),
+  sttStatus: $('sttStatus'),
+  sttStatusText: $('sttStatusText'),
+  sttProgress: $('sttProgress'),
+  sttProgressBar: $('sttProgressBar'),
+  sttFallbackBtn: $('sttFallbackBtn'),
+  brandBuild: $('brandBuild'),
 
   signInputPanel: $('signInputPanel'),
   signCamToggleBtn: $('signCamToggleBtn'),
@@ -92,7 +104,17 @@ let sttEngine = null;         // 'webspeech' | 'vosk' | null — engine ที�
 // Vosk (ทางสำรองบนมือถือ — Web Speech ของ Chrome ชนไมค์กับ Jitsi บน Android
 // ดู r.onerror ด้านล่าง: พอ Web Speech error จะสลับมาทางนี้อัตโนมัติ)
 const VOSK_CDN_URL = 'https://unpkg.com/vosk-browser@0.0.8/dist/vosk.js';
-const VOSK_MODEL_URL = 'https://github.com/Maxham5649/sing/releases/download/1.0.0/vosk-model.zip';
+// ต้องเสิร์ฟจาก origin เดียวกับหน้าเว็บ
+//
+// ของเดิมชี้ไป GitHub release asset ซึ่ง "โหลดได้" ด้วย curl แต่ fetch ใน
+// เบราว์เซอร์โดนบล็อกเสมอ เพราะ release-assets.githubusercontent.com ไม่ส่ง
+// header Access-Control-Allow-Origin กลับมา (เช็คแล้ว: mode 'cors' ได้
+// TypeError, mode 'no-cors' ได้ response แบบ opaque ที่ JS อ่านไม่ได้)
+// ระบบสำรองจึงโหลดโมเดลไม่สำเร็จมาตลอด
+//
+// ไฟล์นี้ยังต้องเป็น zip ที่มีตัวโมเดลอยู่ข้างในตรง ๆ ด้วย — ของเดิมเป็น
+// .tar.gz ห่อใน .zip อีกที ซึ่ง vosk-browser แตกให้ชั้นเดียว
+const VOSK_MODEL_URL = 'vosk-model-th.zip';
 let voskModel = null;
 let voskLoadingPromise = null;
 let voskRecognizer = null;
@@ -127,8 +149,9 @@ function armSttWatchdog() {
   sttWatchdog = setTimeout(() => {
     if (sttSawResult || sttEngine === 'vosk' || voskFallbackPending) return;
     if (!recognitionWanted || !inCall) return;
-    toast('ไมค์ถูกวิดีโอคอลใช้อยู่ ถอดเสียงของ Chrome เลยไม่ทำงาน — สลับไประบบสำรอง', 'warn', 6000);
-    startListeningVosk();
+    recognitionWanted = false; // เลิกวน start() ใหม่ไปเรื่อย ๆ
+    setSttBadge(null);
+    showMicBlockedGuidance();
   }, WEBSPEECH_PROBATION_MS);
 }
 
@@ -143,6 +166,45 @@ function setSttBadge(engine) {
   if (!engine) { els.sttBadge.hidden = true; return; }
   els.sttBadge.textContent = engine === 'vosk' ? 'กำลังฟัง · สำรอง' : 'กำลังฟัง';
   els.sttBadge.hidden = false;
+}
+
+/* สถานะระบบถอดเสียงแบบค้างอยู่บนจอ — toast หายไปใน 8 วิ แต่โหลดโมเดล
+   84MB บนเน็ตมือถือกินเวลาเป็นนาที ผู้ใช้ต้องเห็นว่ามันยังทำงานอยู่
+   kind: 'load' | 'ok' | 'error' | null (ซ่อน) */
+function setSttStatus(kind, text, ratio = null, showFallbackBtn = false) {
+  if (!kind) { els.sttStatus.hidden = true; return; }
+  els.sttStatus.hidden = false;
+  els.sttStatus.className = `stt-status is-${kind}`;
+  els.sttStatusText.textContent = text;
+  if (ratio === null) {
+    els.sttProgress.hidden = true;
+  } else {
+    els.sttProgress.hidden = false;
+    els.sttProgressBar.style.width = `${Math.round(ratio * 100)}%`;
+  }
+  els.sttFallbackBtn.hidden = !showFallbackBtn;
+}
+
+/* ไมค์ถูกวิดีโอคอลยึด — Web Speech ของ Chrome ใช้ไม่ได้แล้ว
+
+   ไม่สลับไป Vosk ให้เองอีกต่อไป: โมเดลไทยที่มีเป็น full model 103MB
+   (ไม่มีตัว small ในคลังของ Vosk เลย) โหลดเสร็จแล้วยัง init อีกเป็นนาที ๆ
+   บนคอม บนมือถือแทบใช้ไม่ได้ — ลากผู้ใช้เข้าไปเจอเองโดยไม่ถามคือแย่กว่า
+   บอกทางที่ใช้ได้ทันที
+
+   ทางที่ใช้ได้ทันทีคือปุ่มไมค์บนคีย์บอร์ด (Gboard) ซึ่งเป็น IME ไม่ได้
+   แย่งไมค์กับ Chrome และเป็นเครื่องถอดเสียงตัวเดียวกับที่ Web Speech
+   เรียกใช้อยู่แล้ว */
+function showMicBlockedGuidance() {
+  setSttStatus(
+    'warn',
+    'ไมค์ถูกวิดีโอคอลใช้อยู่ ระบบถอดเสียงอัตโนมัติเลยไม่ทำงาน — ' +
+    'แตะช่องพิมพ์ด้านล่าง แล้วกดปุ่มไมค์บนคีย์บอร์ดเพื่อพูดแทนพิมพ์ได้',
+    null,
+    true
+  );
+  els.composer.classList.add('is-highlighted');
+  setTimeout(() => els.composer.classList.remove('is-highlighted'), 6000);
 }
 
 /* ==========================================================
@@ -491,8 +553,9 @@ function initSpeechRecognition() {
       webSpeechSilentRestarts += 1;
       if (webSpeechSilentRestarts >= WEBSPEECH_MAX_SILENT_RESTARTS) {
         disarmSttWatchdog();
-        toast('ถอดเสียงของ Chrome เปิดไมค์ไม่ได้ (วิดีโอคอลใช้อยู่) — สลับไประบบสำรอง', 'warn', 6000);
-        startListeningVosk();
+        recognitionWanted = false; // เลิกวน start() ใหม่ไปเรื่อย ๆ
+        setSttBadge(null);
+        showMicBlockedGuidance();
         return;
       }
     }
@@ -531,6 +594,7 @@ function stopListening() {
   voskFallbackPending = false;
   disarmSttWatchdog();
   setSttBadge(null);
+  setSttStatus(null);
   els.signInterim.textContent = '';
   if (recognition) { try { recognition.stop(); } catch (_) {} }
   stopListeningVosk();
@@ -553,12 +617,57 @@ function loadVoskLibrary() {
   });
 }
 
+const MB = 1024 * 1024;
+
+/* ดึงไฟล์โมเดลเองเพื่ออ่าน progress ได้
+   createModel() ของ vosk-browser รับแค่ URL แล้วไป fetch เองข้างใน
+   ซึ่งไม่บอกความคืบหน้าอะไรเลย — บนเน็ตมือถือ 84MB เงียบเป็นนาที
+   ผู้ใช้แยกไม่ออกระหว่าง "กำลังโหลด" กับ "แอปค้าง" */
+async function fetchModelWithProgress(url, onProgress) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`โหลดโมเดลไม่สำเร็จ (HTTP ${res.status})`);
+
+  const total = Number(res.headers.get('content-length')) || 0;
+  // อ่านทีละก้อนไม่ได้ (ไม่มี content-length / ไม่มี body stream) — ส่ง URL
+  // เดิมให้ vosk จัดการต่อ ยังใช้งานได้ แค่ไม่มีตัวเลขให้ดู
+  if (!res.body || !total) return { src: url, revoke: null };
+
+  const reader = res.body.getReader();
+  const chunks = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    onProgress(received, total);
+  }
+  const blobUrl = URL.createObjectURL(new Blob(chunks));
+  return { src: blobUrl, revoke: () => URL.revokeObjectURL(blobUrl) };
+}
+
 function ensureVoskModel() {
   if (voskModel) return Promise.resolve(voskModel);
   if (!voskLoadingPromise) {
     voskLoadingPromise = (async () => {
+      setSttStatus('load', 'กำลังเตรียมระบบถอดเสียงสำรอง…', 0);
       await loadVoskLibrary();
-      voskModel = await window.Vosk.createModel(VOSK_MODEL_URL);
+
+      const { src, revoke } = await fetchModelWithProgress(VOSK_MODEL_URL, (got, total) => {
+        setSttStatus(
+          'load',
+          `กำลังโหลดระบบถอดเสียงสำรอง ${(got / MB).toFixed(0)}/${(total / MB).toFixed(0)} MB`,
+          got / total
+        );
+      });
+
+      // แตกไฟล์ + โหลดเข้า WASM ยังกินเวลาอีกพัก และไม่มี progress ให้อ่าน
+      setSttStatus('load', 'โหลดครบแล้ว กำลังติดตั้งโมเดล… (สักครู่)', 1);
+      try {
+        voskModel = await window.Vosk.createModel(src);
+      } finally {
+        if (revoke) revoke();
+      }
       return voskModel;
     })().catch((err) => {
       voskLoadingPromise = null; // โหลดพังรอบนี้ อนุญาตให้ลองใหม่รอบหน้า
@@ -577,7 +686,7 @@ async function startListeningVosk() {
   disarmSttWatchdog();
   setSttBadge(null); // ยังไม่พร้อมฟังจริงจนกว่าจะโหลด/เปิดไมค์เสร็จ
   try {
-    toast('กำลังโหลดระบบถอดเสียงสำรอง (~84MB ครั้งแรกครั้งเดียว) — ระหว่างนี้พิมพ์ในช่องด้านล่างแทนได้', 'info', 8000);
+    toast('เริ่มโหลดระบบถอดเสียงสำรอง — ระหว่างรอ พิมพ์หรือกดไมค์บนคีย์บอร์ดใช้ไปก่อนได้', 'info', 8000);
     await ensureVoskModel();
     if (!recognitionWanted || !inCall) return; // ผู้ใช้ปิดไมค์/วางสายระหว่างโหลด
 
@@ -629,9 +738,11 @@ async function startListeningVosk() {
 
     sttEngine = 'vosk';
     setSttBadge('vosk');
+    setSttStatus('ok', 'ระบบถอดเสียงสำรองพร้อมแล้ว — พูดได้เลย');
     toast('ระบบถอดเสียงสำรองพร้อมแล้ว พูดได้เลย', 'ok', 4000);
   } catch (err) {
     console.error('Vosk fallback failed:', err);
+    setSttStatus('error', `ระบบถอดเสียงสำรองใช้ไม่ได้: ${(err && err.message) || err} — ใช้ช่องพิมพ์แทนได้`);
     toast(`ระบบถอดเสียงสำรองใช้ไม่ได้ (${(err && err.message) || err}) ใช้ช่องพิมพ์แทนได้`, 'error', 7000);
     stopListeningVosk();
   } finally {
@@ -962,6 +1073,11 @@ function sendComposed() {
   els.composerInput.value = '';
 }
 
+els.sttFallbackBtn.addEventListener('click', () => {
+  els.sttFallbackBtn.hidden = true;
+  startListeningVosk();
+});
+
 els.composerSend.addEventListener('click', sendComposed);
 els.composerInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); sendComposed(); }
@@ -1279,6 +1395,7 @@ void recognizeSignFromVideo;
 /* ---------- เริ่มทำงาน ---------- */
 buildBridgeBars();
 setStatus('ยังไม่เชื่อมต่อ', false);
+els.brandBuild.textContent = APP_BUILD;
 
 if (!window.isSecureContext) {
   toast('หน้านี้เปิดแบบไม่ปลอดภัย — ใช้ http://localhost หรือ https เท่านั้น', 'warn', 8000);

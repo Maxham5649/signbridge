@@ -74,6 +74,66 @@ button { font-family: inherit; }
   letter-spacing: -0.01em;
 }
 
+/* เลขชุดโค้ด — เล็ก ๆ พอให้อ่านออกตอนไล่บั๊กว่าเครื่องได้ของใหม่รึยัง */
+.brand-build {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  background: var(--primary-light);
+  padding: 1px 6px;
+  border-radius: 999px;
+  align-self: center;
+}
+
+/* ===== สถานะระบบถอดเสียง (ค้างบนจอ ไม่ใช่ toast) ===== */
+.stt-status {
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.stt-status-text { margin: 0; }
+
+.stt-status.is-load { background: var(--primary-light); color: var(--primary-dark); }
+.stt-status.is-ok { background: var(--success-light); color: #12693F; }
+.stt-status.is-warn { background: var(--warn-light); color: #6B4A10; }
+.stt-status.is-error { background: var(--danger-light); color: #8A2318; }
+
+.stt-fallback-btn {
+  margin-top: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.stt-fallback-btn:hover { opacity: 1; }
+
+.stt-progress {
+  margin-top: 7px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(18, 63, 174, 0.15);
+  overflow: hidden;
+}
+
+.stt-progress-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  transition: width 0.25s ease;
+}
+
 .call-status {
   display: flex;
   align-items: center;
@@ -779,6 +839,17 @@ button { font-family: inherit; }
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* ชี้ให้เห็นตอนไมค์ถูกยึด — ช่องนี้คือทางที่ใช้ได้จริงทันที */
+.composer.is-highlighted {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(28, 93, 250, 0.18), var(--shadow);
+  animation: composer-pulse 1s ease-in-out 3;
+}
+
+@keyframes composer-pulse {
+  50% { box-shadow: 0 0 0 7px rgba(28, 93, 250, 0.10), var(--shadow); }
 }
 
 .composer-label {

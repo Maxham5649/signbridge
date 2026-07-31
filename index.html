@@ -30,6 +30,8 @@
     <div class="brand">
       <span class="brand-mark" aria-hidden="true"></span>
       <span class="brand-name">SignBridge</span>
+      <!-- บอกว่ากำลังรันโค้ดชุดไหน — เวลาแก้บั๊กจะได้รู้แน่ว่าเครื่องได้ของใหม่แล้วจริง -->
+      <span class="brand-build" id="brandBuild"></span>
     </div>
     <div class="call-status" id="callStatus">
       <span class="status-dot" id="statusDot"></span>
@@ -110,6 +112,20 @@
             </div>
             <p class="sign-caption" id="signCaption">รอเสียงพูดจากฝั่งผู้ได้ยิน</p>
             <p class="sign-interim" id="signInterim" aria-live="polite"></p>
+
+            <!-- สถานะระบบถอดเสียง — ต้องค้างอยู่ ไม่ใช่ toast ที่หายไปใน 8 วิ
+                 เพราะโหลดโมเดลสำรอง 84MB บนเน็ตมือถือใช้เวลาเป็นนาที -->
+            <div class="stt-status" id="sttStatus" hidden>
+              <p class="stt-status-text" id="sttStatusText" aria-live="polite"></p>
+              <div class="stt-progress" id="sttProgress" hidden>
+                <div class="stt-progress-bar" id="sttProgressBar"></div>
+              </div>
+              <!-- ระบบสำรองเป็นแบบ opt-in — โหลด 84MB แล้วยัง init นานมาก
+                   ไม่ควรลากผู้ใช้เข้าไปเองโดยไม่ถาม -->
+              <button type="button" class="stt-fallback-btn" id="sttFallbackBtn" hidden>
+                ลองใช้ระบบถอดเสียงสำรอง (โหลด ~84MB)
+              </button>
+            </div>
           </div>
 
           <!-- จดจำท่าภาษามือจากกล้อง (Phase 2) — โชว์เฉพาะบทบาท "ผู้หูหนวก" -->
