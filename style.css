@@ -75,7 +75,59 @@ button { font-family: inherit; }
 }
 
 /* เลขชุดโค้ด — เล็ก ๆ พอให้อ่านออกตอนไล่บั๊กว่าเครื่องได้ของใหม่รึยัง */
+/* ===== แผงไล่บั๊ก (แตะเลข build 3 ครั้ง) ===== */
+.debug-panel {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  max-height: 55vh;
+  z-index: 90;
+  background: #0B1B33;
+  color: #D7E3F7;
+  border-radius: var(--radius-md);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.debug-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.debug-head span { flex: 1; }
+.debug-head button {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.debug-log {
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
 .brand-build {
+  cursor: pointer;
+
   font-family: var(--font-mono);
   font-size: 0.65rem;
   color: var(--text-muted);

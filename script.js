@@ -17,7 +17,7 @@
    TWA ดึงหน้าเว็บสด ไม่ได้ฝังโค้ดไว้ในตัว APK เวลาไล่บั๊กจึงต้องมีอะไร
    ยืนยันได้ว่าเครื่องนั้นได้ของใหม่แล้วจริง ไม่ใช่ค้างของเก่าอยู่
    *** แก้เลขนี้ทุกครั้งที่ push โค้ดขึ้น production *** */
-const APP_BUILD = 'b12';
+const APP_BUILD = 'b13';
 
 const $ = (id) => document.getElementById(id);
 
@@ -50,6 +50,10 @@ const els = {
   sttProgressBar: $('sttProgressBar'),
   sttFallbackBtn: $('sttFallbackBtn'),
   brandBuild: $('brandBuild'),
+  debugPanel: $('debugPanel'),
+  debugLog: $('debugLog'),
+  debugCopyBtn: $('debugCopyBtn'),
+  debugCloseBtn: $('debugCloseBtn'),
 
   signInputPanel: $('signInputPanel'),
   signCamToggleBtn: $('signCamToggleBtn'),
@@ -155,6 +159,20 @@ const RESTART_DELAY_MAX = 3000;
 const KEEPALIVE_INTERVAL_MS = 4000;
 
 let lastFinalIndex = -1;       // ตำแหน่งผล final ล่าสุดที่ส่งออกไปแล้วใน session นี้
+let lastFinalText = '';        // ข้อความ final ล่าสุดที่ส่งออกไป ใช้ตัดส่วนที่ซ้ำหัว
+
+/* บันทึกสิ่งที่ recognizer ส่งออกมาจริง ๆ ไว้ดูตอนไล่บั๊ก
+   เปิดดูได้โดยแตะเลข build ข้าง ๆ ชื่อแอป 3 ครั้ง — จำเป็นเพราะไล่บั๊ก
+   ลำดับคลิปบนมือถือจากฝั่ง dev ล้วน ๆ เดาไม่ถูกสักที */
+const STT_LOG_MAX = 60;
+const sttLog = [];
+function logStt(kind, detail) {
+  const t = new Date();
+  const stamp = `${String(t.getMinutes()).padStart(2, '0')}:${String(t.getSeconds()).padStart(2, '0')}.${String(t.getMilliseconds()).padStart(3, '0')}`;
+  sttLog.push(`${stamp} ${kind} ${detail}`);
+  if (sttLog.length > STT_LOG_MAX) sttLog.shift();
+  if (els.debugLog && !els.debugPanel.hidden) els.debugLog.textContent = sttLog.join('\n');
+}
 let sttSawResult = false;      // เคยได้ผล (รวม interim) จาก Web Speech รอบนี้ไหม
 let sttWatchdog = null;
 /* เดิมตั้งไว้ 9 วิแล้ว "ยอมแพ้" คือหยุดฟังถาวร ซึ่งผิด — เงียบเป็นเรื่องปกติ
@@ -454,6 +472,7 @@ function loadSignVideoSrc() {
 // แล้วหยุด ต่อคำถัดไปในคิวเอง — ไม่มีไฟล์จริงหรือโหลดพัง ก็ fallback อวาตาร์
 async function playNextSignVideo() {
   const next = signVideoQueue.shift();
+  if (next) logStt('play', `${next.id} (${next.start}-${next.end}s)`);
   if (!next) {
     signVideoPlaying = false;
     showSignAvatarFallback();
@@ -510,6 +529,7 @@ function playSignAvatar(text) {
   // ต่อคำใหม่ท้ายคิวเดิม แทนที่จะล้างคิวทิ้งแล้วเริ่มใหม่ — กันไม่ให้
   // ตัดคลิปที่กำลังเล่นค้างอยู่ตอนพูดประโยคถัดไปแทรกเข้ามาก่อนท่าเดิมจบ
   signVideoQueue = signVideoQueue.concat(matches);
+  logStt('queue', `+${matches.map((m) => m.id).join(',')} | คิว: ${signVideoQueue.map((m) => m.id).join(',') || '(ว่าง)'}`);
   if (!signVideoPlaying) {
     playNextSignVideo();
   }
@@ -586,22 +606,40 @@ function initSpeechRecognition() {
     disarmSttWatchdog();
 
     setSttStatus(null); // ได้ยินแล้ว เอาคำแนะนำออก
+    logStt('result', `idx=${event.resultIndex} len=${event.results.length}`);
+
     let interim = '';
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const res = event.results[i];
       const text = res[0].transcript.trim();
-      if (res.isFinal) {
-        /* continuous: true ทำให้ event.results สะสมผลของทั้ง session ไว้ และ
-           Chrome ย้อนกลับไปแก้ผลเก่าได้ ทำให้ resultIndex ชี้กลับไปตำแหน่งที่
-           เคย final ไปแล้ว ถ้าส่งทุกครั้งที่วนเจอ ประโยคเก่าจะถูกส่งซ้ำ
-           คลิปเลยเล่นซ้ำและสลับลำดับ (1,2,1,3 แทนที่จะเป็น 1,2,3)
-           จำตำแหน่งสุดท้ายที่ส่งไปแล้ว แล้วส่งเฉพาะที่ใหม่กว่า */
-        if (i > lastFinalIndex) {
-          lastFinalIndex = i;
-          if (text) broadcast('speech', text);
-        }
-      } else {
-        interim += text;
+      logStt('  ', `[${i}] ${res.isFinal ? 'FINAL' : 'interim'} "${text}"`);
+
+      if (!res.isFinal) { interim += text; continue; }
+
+      /* continuous: true ทำให้ event.results สะสมผลของทั้ง session ไว้ และ
+         Chrome ย้อนกลับไปแก้ผลเก่าได้ ทำให้ resultIndex ชี้กลับไปตำแหน่งที่
+         เคย final ไปแล้ว ถ้าส่งทุกครั้งที่วนเจอ ประโยคเก่าจะถูกส่งซ้ำ
+         คลิปเลยเล่นซ้ำและสลับลำดับ (1,2,1,3 แทนที่จะเป็น 1,2,3) */
+      if (i < lastFinalIndex) { logStt('skip', `old index ${i}`); continue; }
+
+      /* บาง build ของ Chrome (เจอบ่อยบน Android) ไม่ขึ้น index ใหม่ แต่ต่อ
+         ประโยคใหม่ท้ายผลเดิมแล้วมาร์ค final ซ้ำที่ index เดิม เช่น
+         "สวัสดี" -> "สวัสดี ขอบคุณ" -> "สวัสดี ขอบคุณ สบายดี"
+         ถ้าส่งทั้งก้อนทุกครั้ง คลิปเก่าจะถูกคิวซ้ำทุกรอบ ตัดหัวที่ส่งไปแล้วทิ้ง */
+      let toSend = text;
+      if (i === lastFinalIndex && lastFinalText && text.startsWith(lastFinalText)) {
+        toSend = text.slice(lastFinalText.length).trim();
+        logStt('trim', `prefix already sent -> "${toSend}"`);
+      } else if (i === lastFinalIndex && text === lastFinalText) {
+        logStt('skip', 'same text at same index');
+        continue;
+      }
+
+      lastFinalIndex = i;
+      lastFinalText = text;
+      if (toSend) {
+        logStt('send', `"${toSend}"`);
+        broadcast('speech', toSend);
       }
     }
     els.signInterim.textContent = interim;
@@ -630,6 +668,8 @@ function initSpeechRecognition() {
   r.onstart = () => {
     recognitionRunning = true;
     lastFinalIndex = -1; // session ใหม่ event.results เริ่มนับใหม่จาก 0
+    lastFinalText = '';
+    logStt('start', 'session');
   };
 
   r.onend = () => {
@@ -1532,6 +1572,39 @@ void recognizeSignFromVideo;
 buildBridgeBars();
 setStatus('ยังไม่เชื่อมต่อ', false);
 els.brandBuild.textContent = APP_BUILD;
+
+/* แตะเลข build 3 ครั้งเพื่อเปิดแผงบันทึก — ซ่อนไว้แบบนี้เพราะผู้ใช้ทั่วไป
+   ไม่ต้องเห็น แต่เวลาไล่บั๊กบนมือถือต้องเปิดได้โดยไม่ต้องต่อสาย USB */
+let buildTapCount = 0;
+let buildTapTimer = null;
+els.brandBuild.addEventListener('click', () => {
+  buildTapCount += 1;
+  clearTimeout(buildTapTimer);
+  buildTapTimer = setTimeout(() => { buildTapCount = 0; }, 1200);
+  if (buildTapCount >= 3) {
+    buildTapCount = 0;
+    els.debugPanel.hidden = false;
+    els.debugLog.textContent = sttLog.join('\n') || '(ยังไม่มีบันทึก — พูดสักประโยคก่อน)';
+  }
+});
+
+els.debugCloseBtn.addEventListener('click', () => { els.debugPanel.hidden = true; });
+
+els.debugCopyBtn.addEventListener('click', async () => {
+  const text = sttLog.join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('คัดลอกบันทึกแล้ว', 'ok');
+  } catch (_) {
+    // clipboard ถูกบล็อกในบางบริบท — เลือกข้อความให้ผู้ใช้ก๊อปเองแทน
+    const range = document.createRange();
+    range.selectNodeContents(els.debugLog);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    toast('เลือกข้อความให้แล้ว กดค้างเพื่อคัดลอก', 'info', 5000);
+  }
+});
 
 /* กันเหนียวคู่กับ muted บน <video id="signVideo">: บางเวอร์ชันของ Chrome
    ยังลงทะเบียน media session ให้อยู่ดี ซึ่งทำให้คลิปภาษามือไปโผล่เป็น

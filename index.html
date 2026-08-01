@@ -230,6 +230,17 @@
     </button>
   </footer>
 
+  <!-- แผงไล่บั๊ก: แตะเลข build ข้างชื่อแอป 3 ครั้งเพื่อเปิด
+       มีไว้ดูว่า recognizer บนเครื่องจริงส่งอะไรออกมา เวลาอาการเกิดเฉพาะบนมือถือ -->
+  <section class="debug-panel" id="debugPanel" hidden>
+    <div class="debug-head">
+      <span>บันทึกระบบถอดเสียง</span>
+      <button type="button" id="debugCopyBtn">คัดลอก</button>
+      <button type="button" id="debugCloseBtn">ปิด</button>
+    </div>
+    <pre class="debug-log" id="debugLog"></pre>
+  </section>
+
   <div class="toast-stack" id="toastStack" aria-live="assertive"></div>
 
 </div>
