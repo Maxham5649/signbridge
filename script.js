@@ -17,7 +17,7 @@
    TWA ดึงหน้าเว็บสด ไม่ได้ฝังโค้ดไว้ในตัว APK เวลาไล่บั๊กจึงต้องมีอะไร
    ยืนยันได้ว่าเครื่องนั้นได้ของใหม่แล้วจริง ไม่ใช่ค้างของเก่าอยู่
    *** แก้เลขนี้ทุกครั้งที่ push โค้ดขึ้น production *** */
-const APP_BUILD = 'b11';
+const APP_BUILD = 'b12';
 
 const $ = (id) => document.getElementById(id);
 
@@ -154,6 +154,7 @@ const RESTART_DELAY_MIN = 300;
 const RESTART_DELAY_MAX = 3000;
 const KEEPALIVE_INTERVAL_MS = 4000;
 
+let lastFinalIndex = -1;       // ตำแหน่งผล final ล่าสุดที่ส่งออกไปแล้วใน session นี้
 let sttSawResult = false;      // เคยได้ผล (รวม interim) จาก Web Speech รอบนี้ไหม
 let sttWatchdog = null;
 /* เดิมตั้งไว้ 9 วิแล้ว "ยอมแพ้" คือหยุดฟังถาวร ซึ่งผิด — เงียบเป็นเรื่องปกติ
@@ -590,7 +591,15 @@ function initSpeechRecognition() {
       const res = event.results[i];
       const text = res[0].transcript.trim();
       if (res.isFinal) {
-        if (text) broadcast('speech', text);
+        /* continuous: true ทำให้ event.results สะสมผลของทั้ง session ไว้ และ
+           Chrome ย้อนกลับไปแก้ผลเก่าได้ ทำให้ resultIndex ชี้กลับไปตำแหน่งที่
+           เคย final ไปแล้ว ถ้าส่งทุกครั้งที่วนเจอ ประโยคเก่าจะถูกส่งซ้ำ
+           คลิปเลยเล่นซ้ำและสลับลำดับ (1,2,1,3 แทนที่จะเป็น 1,2,3)
+           จำตำแหน่งสุดท้ายที่ส่งไปแล้ว แล้วส่งเฉพาะที่ใหม่กว่า */
+        if (i > lastFinalIndex) {
+          lastFinalIndex = i;
+          if (text) broadcast('speech', text);
+        }
       } else {
         interim += text;
       }
@@ -618,7 +627,10 @@ function initSpeechRecognition() {
     }
   };
 
-  r.onstart = () => { recognitionRunning = true; };
+  r.onstart = () => {
+    recognitionRunning = true;
+    lastFinalIndex = -1; // session ใหม่ event.results เริ่มนับใหม่จาก 0
+  };
 
   r.onend = () => {
     recognitionRunning = false;
