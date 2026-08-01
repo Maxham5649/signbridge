@@ -17,7 +17,7 @@
    TWA ดึงหน้าเว็บสด ไม่ได้ฝังโค้ดไว้ในตัว APK เวลาไล่บั๊กจึงต้องมีอะไร
    ยืนยันได้ว่าเครื่องนั้นได้ของใหม่แล้วจริง ไม่ใช่ค้างของเก่าอยู่
    *** แก้เลขนี้ทุกครั้งที่ push โค้ดขึ้น production *** */
-const APP_BUILD = 'b13';
+const APP_BUILD = 'b14';
 
 const $ = (id) => document.getElementById(id);
 
@@ -616,23 +616,27 @@ function initSpeechRecognition() {
 
       if (!res.isFinal) { interim += text; continue; }
 
-      /* continuous: true ทำให้ event.results สะสมผลของทั้ง session ไว้ และ
-         Chrome ย้อนกลับไปแก้ผลเก่าได้ ทำให้ resultIndex ชี้กลับไปตำแหน่งที่
-         เคย final ไปแล้ว ถ้าส่งทุกครั้งที่วนเจอ ประโยคเก่าจะถูกส่งซ้ำ
-         คลิปเลยเล่นซ้ำและสลับลำดับ (1,2,1,3 แทนที่จะเป็น 1,2,3) */
       if (i < lastFinalIndex) { logStt('skip', `old index ${i}`); continue; }
+      if (!text) { lastFinalIndex = i; continue; } // Chrome ยิง final ว่างเปล่ารัว ๆ ระหว่างพูด
 
-      /* บาง build ของ Chrome (เจอบ่อยบน Android) ไม่ขึ้น index ใหม่ แต่ต่อ
-         ประโยคใหม่ท้ายผลเดิมแล้วมาร์ค final ซ้ำที่ index เดิม เช่น
-         "สวัสดี" -> "สวัสดี ขอบคุณ" -> "สวัสดี ขอบคุณ สบายดี"
-         ถ้าส่งทั้งก้อนทุกครั้ง คลิปเก่าจะถูกคิวซ้ำทุกรอบ ตัดหัวที่ส่งไปแล้วทิ้ง */
+      /* Chrome ส่งข้อความสะสมทั้งก้อนซ้ำ ๆ ไม่ใช่ส่งเฉพาะประโยคใหม่ และ
+         index ก็เลื่อนไปเรื่อยแม้ข้อความจะเหมือนเดิมเป๊ะ (จากบันทึกจริง
+         บนมือถือ: [8] และ [9] เป็น "สวัสดีครับขอบคุณครับไม่เป็นไรครับ"
+         เหมือนกัน ห่างกัน 1.66 วิ)
+         จึงต้องเทียบกับข้อความที่ส่งไปแล้วเสมอ ไม่ผูกกับ index — ถ้าเหมือนเดิม
+         ทิ้ง ถ้าต่อยาวขึ้นก็ส่งเฉพาะส่วนท้ายที่เพิ่มมา ไม่งั้นคลิปเก่าถูกคิวซ้ำ
+         ทุกรอบ ลำดับเลยเพี้ยน */
       let toSend = text;
-      if (i === lastFinalIndex && lastFinalText && text.startsWith(lastFinalText)) {
-        toSend = text.slice(lastFinalText.length).trim();
-        logStt('trim', `prefix already sent -> "${toSend}"`);
-      } else if (i === lastFinalIndex && text === lastFinalText) {
-        logStt('skip', 'same text at same index');
-        continue;
+      if (lastFinalText) {
+        if (text === lastFinalText) {
+          logStt('skip', 'ข้อความเดิมที่ส่งไปแล้ว');
+          lastFinalIndex = i;
+          continue;
+        }
+        if (text.startsWith(lastFinalText)) {
+          toSend = text.slice(lastFinalText.length).trim();
+          logStt('trim', `ตัดหัวที่ส่งแล้ว -> "${toSend}"`);
+        }
       }
 
       lastFinalIndex = i;
