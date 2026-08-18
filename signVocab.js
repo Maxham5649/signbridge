@@ -1,50 +1,231 @@
 /* ==========================================================
-   คลังคำศัพท์ พูดไทย → ภาษามือไทย (Phase 1)
+   คลังคำศัพท์ พูดไทย -> ภาษามือไทย (Phase 1)
    ----------------------------------------------------------
-   ทุกคำอ้างอิงคลิปรวมไฟล์เดียว SIGN_VIDEO_SRC ด้วยช่วงเวลา start/end
-   (วินาที) ตราบใดที่ยังไม่มีไฟล์ .mp4 จริงหรือโหลดไม่สำเร็จ ระบบจะ
-   fallback ไปใช้อวาตาร์ + ข้อความแบบเดิมโดยอัตโนมัติ
-   (ดู playSignAvatar/playNextSignVideo ใน script.js)
+   คำศัพท์ 195 คำ/วลี จากคลิปภาษามือจริง 242 คลิป (คนหูหนวก/ล่ามอัดเอง
+   ไม่มีท่าไหนเป็น AI เดา) — คลิปถูกบีบอัดขนาดแล้ว (2.4GB -> ~27MB รวม)
+   เก็บไว้ที่โฟลเดอร์ signs/ ชื่อไฟล์ = คำ/วลีที่พูด
 
-   11 คำด้านล่างมี start/end จริงจากคลิป signs/1.mp4 (ยาวรวม 94.6 วิ)
-   ที่ผู้ใช้ยืนยันเวลาแล้ว — คำอื่นที่เคยเป็น placeholder (ยัง/ไม่มี/
-   ห้องน้ำ/ฉุกเฉิน ฯลฯ) ถูกเอาออกไปก่อนชั่วคราว เพราะไม่มีเวลาจริงใน
-   คลิปนี้ — ถ้าปล่อย placeholder ไว้จะเสี่ยง seek ไปเล่นทับช่วงเวลา
-   ของคำอื่นที่ยืนยันแล้วโดยไม่ตั้งใจ อยากเพิ่มคำไหน ส่ง start/end จริง
-   มาเพิ่มได้ทีละคำ
+   บางคำมีหลายคลิป (videos เป็น array มากกว่า 1 ช่อง) เพราะอัดซ้ำหลาย
+   เทค (ไฟล์ลงท้าย "(1)") — เล่นแบบสุ่มเลือกเทคทุกครั้งที่คำนั้นถูกพูดถึง
+   ให้ท่าดูเป็นธรรมชาติขึ้น ไม่ซ้ำเป๊ะทุกรอบ
+
+   ชื่อไฟล์บางไฟล์สะกดแบบเก่า (นิคหิต ํ + สระอา า แยกกัน เช่น "คํ่า")
+   สคริปต์ generate-vocab.js ปรับให้เป็นสะกดมาตรฐาน (สระอำ ำ ตัวเดียว
+   เช่น "ค่ำ") ให้ label/match ตอน runtime อัตโนมัติแล้ว — ไม่ต้องแก้เอง
 
    เพิ่ม/แก้/ลบคำได้อิสระในไฟล์นี้ไฟล์เดียว ไม่ต้องแตะ script.js
-   - id:    ใช้เป็นชื่ออ้างอิง ไม่แสดงผล
-   - match: รายการคำ/วลีที่ถ้าเจอ (แบบตรงเป๊ะ หรือใกล้เคียง — สะกด/
-            ถอดเสียงเพี้ยนเล็กน้อยได้ ดู fuzzyFind ใน script.js) ในประโยค
-            ที่ถอดเสียงมา จะถือว่า "ตรง" กับคำนี้ — ไม่ต้องใส่ "ครับ/ค่ะ"
-            ต่อท้าย เพราะ "ขอบคุณ" ก็จับ "ขอบคุณครับ"/"ขอบคุณค่ะ" ได้อยู่
-            แล้ว (เป็น substring) — ถ้าสองคำซ้อนกัน (เช่น "ขอบคุณ" กับ
-            "ขอบคุณมาก") script.js จะเลือกคำที่ยาว/เฉพาะเจาะจงสุดให้เอง
-   - start/end: ช่วงเวลาของท่านี้ในไฟล์วิดีโอรวม SIGN_VIDEO_SRC (วินาที)
-   - label: ข้อความที่โชว์คู่กับวิดีโอ/ใช้เวลา fallback
+   - id:     ใช้เป็นชื่ออ้างอิง ไม่แสดงผล
+   - match:  รายการคำ/วลีที่ถ้าเจอ (แบบตรงเป๊ะ หรือใกล้เคียง — สะกด/
+             ถอดเสียงเพี้ยนเล็กน้อยได้ ดู fuzzyFind ใน script.js) ในประโยค
+             ที่ถอดเสียงมา จะถือว่า "ตรง" กับคำนี้ — ถ้าสองคำซ้อนกัน
+             (เช่น "ขอบคุณ" กับ "ขอบคุณมาก") script.js จะเลือกคำที่ยาว/
+             เฉพาะเจาะจงสุดให้เอง
+   - videos: รายชื่อไฟล์คลิป (path จาก root ของเว็บ) ของคำนี้ — มีได้
+             มากกว่า 1 ไฟล์ถ้าอัดไว้หลายเทค
+   - label:  ข้อความที่โชว์คู่กับวิดีโอ
+
+   คำที่สะกดสั้น <=2 ตัวอักษร (กบ, ขม, มี, ลม, สี) ตัดออกจาก auto-match
+   ฝั่งพูด->ภาษามือไปเลย (ดู AUTO_MATCH_MIN_RAW_LEN ใน script.js) เพราะ
+   ภาษาไทยเขียนต่อเนื่องไม่มีช่องว่างคั่นคำ การันตีไม่ได้ว่าจะไม่ไปจับ
+   substring กลางคำอื่นที่ไม่เกี่ยวข้อง (เช่น "สี" จะโผล่ทุกครั้งที่มีคำ
+   ว่าสีอะไรอยู่ในประโยค) — คลิปยังอยู่ในไฟล์นี้เผื่อใช้ทางอื่นทีหลัง
+   (เช่น ปุ่มเลือกคำเอง) ไม่ได้ถูกลบทิ้ง
    ========================================================== */
 
-// ที่อยู่ของคลิปรวม — ลองไฟล์ในเครื่องก่อน (ตอน dev บน localhost) ถ้าไม่มี
-// ค่อยตกไปใช้ตัวที่อัปไว้เป็น GitHub Release asset
-//
-// คลิปไม่ได้ commit ลง repo โดยตั้งใจ (ดู .gitignore): ไฟล์ที่เข้า git history
-// แล้วจะเอาออกให้หมดจริงไม่ได้ แต่ Release asset ลบ/เปลี่ยนทีหลังได้
-// เปลี่ยนคลิปใหม่ = อัป asset ทับ แล้วแก้ start/end ด้านล่างให้ตรง
-const SIGN_VIDEO_SRC = 'signs/1.mp4';
-const SIGN_VIDEO_FALLBACK_SRC =
-  'https://github.com/Maxham5649/signbridge/releases/download/v1/1.mp4';
-
 const SIGN_VOCAB = [
-  { id: 'thank-you',           match: ['ขอบคุณ'],                          start: 23, end: 25, label: 'ขอบคุณ' },
-  { id: 'greeting-hello',      match: ['สวัสดี', 'หวัดดี'],                 start: 26, end: 28, label: 'สวัสดี' },
-  { id: 'how-are-you',         match: ['สบายดีไหม', 'เป็นอย่างไรบ้าง'],     start: 28, end: 30, label: 'สบายดีไหม' },
-  { id: 'im-fine',              match: ['สบายดี'],                          start: 30, end: 32, label: 'สบายดี' },
-  { id: 'glad-to-see-you',     match: ['ดีใจที่ได้เจอคุณ', 'ดีใจที่เจอคุณ', 'ดีใจที่ได้เจอ'], start: 42, end: 46, label: 'ดีใจที่ได้เจอคุณ' },
-  { id: 'long-time-no-see',    match: ['ไม่ได้เจอกันนาน', 'ไม่เจอกันนาน'],  start: 47, end: 50, label: 'ไม่ได้เจอกันนาน' },
-  { id: 'sorry',                match: ['ขอโทษ'],                           start: 53, end: 55, label: 'ขอโทษ' },
-  { id: 'no-problem',          match: ['ไม่เป็นไร'],                       start: 56, end: 58, label: 'ไม่เป็นไร' },
-  { id: 'thank-you-very-much', match: ['ขอบคุณมาก'],                       start: 58, end: 60, label: 'ขอบคุณมาก' },
-  { id: 'see-you-again',       match: ['แล้วเจอกันใหม่', 'เจอกันใหม่'],     start: 60, end: 63, label: 'แล้วเจอกันใหม่' },
-  { id: 'good-luck',           match: ['โชคดี'],                           start: 63, end: 65, label: 'โชคดี' },
+  { id: "ขอให้โชคดีในวันพิเศษวันนี้", match: ["ขอให้โชคดีในวันพิเศษวันนี้"], videos: ["signs/ขอให้โชคดีในวันพิเศษวันนี้.mp4"], label: "ขอให้โชคดีในวันพิเศษวันนี้" },
+  { id: "วันนี้รู้สึกเป็นยังไง", match: ["วันนี้รู้สึกเป็นยังไง"], videos: ["signs/วันนี้รู้สึกเป็นยังไง.mp4"], label: "วันนี้รู้สึกเป็นยังไง" },
+  { id: "เราจะอยู่ข้างๆเธอ", match: ["เราจะอยู่ข้างๆเธอ"], videos: ["signs/เราจะอยู่ข้างๆเธอ.mp4"], label: "เราจะอยู่ข้างๆเธอ" },
+  { id: "กินข้าวแล้วรึยัง", match: ["กินข้าวแล้วรึยัง"], videos: ["signs/กินข้าวแล้วรึยัง.mp4"], label: "กินข้าวแล้วรึยัง" },
+  { id: "ภาษามือทำอย่างไร", match: ["ภาษามือทำอย่างไร"], videos: ["signs/ภาษามือทำอย่างไร.mp4"], label: "ภาษามือทำอย่างไร" },
+  { id: "ยาแก้ปวดเมื่อย", match: ["ยาแก้ปวดเมื่อย"], videos: ["signs/ยาแก้ปวดเมื่อย.mp4"], label: "ยาแก้ปวดเมื่อย" },
+  { id: "ตลอดเวลา24ชม.", match: ["ตลอดเวลา24ชม."], videos: ["signs/ตลอดเวลา24ชม..mp4"], label: "ตลอดเวลา24ชม." },
+  { id: "เป็นยังไงบ้าง", match: ["เป็นยังไงบ้าง"], videos: ["signs/เป็นยังไงบ้าง.mp4"], label: "เป็นยังไงบ้าง" },
+  { id: "ไม่ต้องลำบาก", match: ["ไม่ต้องลำบาก"], videos: ["signs/ไม่ต้องลำบาก.mp4"], label: "ไม่ต้องลำบาก" },
+  { id: "ยาแก้ปวดท้อง", match: ["ยาแก้ปวดท้อง"], videos: ["signs/ยาแก้ปวดท้อง.mp4"], label: "ยาแก้ปวดท้อง" },
+  { id: "ราคาเท่าไหร่", match: ["ราคาเท่าไหร่"], videos: ["signs/ราคาเท่าไหร่.mp4"], label: "ราคาเท่าไหร่" },
+  { id: "อายุเท่าไหร่", match: ["อายุเท่าไหร่"], videos: ["signs/อายุเท่าไหร่.mp4"], label: "อายุเท่าไหร่" },
+  { id: "เมื่อวานซืน", match: ["เมื่อวานซืน"], videos: ["signs/เมื่อวานซืน.mp4"], label: "เมื่อวานซืน" },
+  { id: "วันพฤหัสบดี", match: ["วันพฤหัสบดี"], videos: ["signs/วันพฤหัสบดี.mp4"], label: "วันพฤหัสบดี" },
+  { id: "วิทยาศาสตร์", match: ["วิทยาศาสตร์"], videos: ["signs/วิทยาศาสตร์.mp4"], label: "วิทยาศาสตร์" },
+  { id: "กำลังใจให้", match: ["กำลังใจให้"], videos: ["signs/กำลังใจให้.mp4"], label: "กำลังใจให้" },
+  { id: "คณิตศาสตร์", match: ["คณิตศาสตร์"], videos: ["signs/คณิตศาสตร์.mp4"], label: "คณิตศาสตร์" },
+  { id: "เจอกันใหม่", match: ["เจอกันใหม่"], videos: ["signs/เจอกันใหม่.mp4"], label: "เจอกันใหม่" },
+  { id: "ภาษาอังกฤษ", match: ["ภาษาอังกฤษ"], videos: ["signs/ภาษาอังกฤษ.mp4"], label: "ภาษาอังกฤษ" },
+  { id: "วันอาทิตย์", match: ["วันอาทิตย์"], videos: ["signs/วันอาทิตย์.mp4"], label: "วันอาทิตย์" },
+  { id: "สมัครยังไง", match: ["สมัครยังไง"], videos: ["signs/สมัครยังไง.mp4"], label: "สมัครยังไง" },
+  { id: "เหนื่อยไหม", match: ["เหนื่อยไหม"], videos: ["signs/เหนื่อยไหม.mp4"], label: "เหนื่อยไหม" },
+  { id: "ก่อนอาหาร", match: ["ก่อนอาหาร"], videos: ["signs/ก่อนอาหาร.mp4"], label: "ก่อนอาหาร" },
+  { id: "โดดเดี่ยว", match: ["โดดเดี่ยว"], videos: ["signs/โดดเดี่ยว(1).mp4", "signs/โดดเดี่ยว.mp4"], label: "โดดเดี่ยว" },
+  { id: "ทำอย่างไร", match: ["ทำอย่างไร"], videos: ["signs/ทำอย่างไร.mp4"], label: "ทำอย่างไร" },
+  { id: "เทคโนโลยี", match: ["เทคโนโลยี"], videos: ["signs/เทคโนโลยี.mp4"], label: "เทคโนโลยี" },
+  { id: "เที่ยงคืน", match: ["เที่ยงคืน"], videos: ["signs/เที่ยงคืน.mp4"], label: "เที่ยงคืน" },
+  { id: "เที่ยงวัน", match: ["เที่ยงวัน"], videos: ["signs/เที่ยงวัน.mp4"], label: "เที่ยงวัน" },
+  { id: "มีความสุข", match: ["มีความสุข"], videos: ["signs/มีความสุข(1).mp4", "signs/มีความสุข.mp4"], label: "มีความสุข" },
+  { id: "เมื่อไหร่", match: ["เมื่อไหร่"], videos: ["signs/เมื่อไหร่.mp4"], label: "เมื่อไหร่" },
+  { id: "ไม่เข้าใจ", match: ["ไม่เข้าใจ"], videos: ["signs/ไม่เข้าใจ.mp4"], label: "ไม่เข้าใจ" },
+  { id: "วันจันทร์", match: ["วันจันทร์"], videos: ["signs/วันจันทร์.mp4"], label: "วันจันทร์" },
+  { id: "วันอังคาร", match: ["วันอังคาร"], videos: ["signs/วันอังคาร.mp4"], label: "วันอังคาร" },
+  { id: "สีน้ำเงิน", match: ["สีน้ำเงิน"], videos: ["signs/สีนํ้าเงิน.mp4"], label: "สีน้ำเงิน" },
+  { id: "แก้ยังไง", match: ["แก้ยังไง"], videos: ["signs/แก้ยังไง.mp4"], label: "แก้ยังไง" },
+  { id: "ดอกเบี้ย", match: ["ดอกเบี้ย"], videos: ["signs/ดอกเบี้ย.mp4"], label: "ดอกเบี้ย" },
+  { id: "ตื่นเต้น", match: ["ตื่นเต้น"], videos: ["signs/ตื่นเต้น(1).mp4", "signs/ตื่นเต้น.mp4"], label: "ตื่นเต้น" },
+  { id: "เท่าไหร่", match: ["เท่าไหร่"], videos: ["signs/เท่าไหร่(1).mp4", "signs/เท่าไหร่.mp4"], label: "เท่าไหร่" },
+  { id: "นาฏศิลป์", match: ["นาฏศิลป์"], videos: ["signs/นาฏศิลป์.mp4"], label: "นาฏศิลป์" },
+  { id: "ผ่อนชำระ", match: ["ผ่อนชำระ"], videos: ["signs/ผ่อนชำระ.mp4"], label: "ผ่อนชำระ" },
+  { id: "พรุ่งนี้", match: ["พรุ่งนี้"], videos: ["signs/พรุ่งนี้.mp4"], label: "พรุ่งนี้" },
+  { id: "เมื่อวาน", match: ["เมื่อวาน"], videos: ["signs/เมื่อวาน.mp4"], label: "เมื่อวาน" },
+  { id: "ไม่อร่อย", match: ["ไม่อร่อย"], videos: ["signs/ไม่อร่อย.mp4"], label: "ไม่อร่อย" },
+  { id: "ยาลดหวัด", match: ["ยาลดหวัด"], videos: ["signs/ยาลดหวัด.mp4"], label: "ยาลดหวัด" },
+  { id: "วันศุกร์", match: ["วันศุกร์"], videos: ["signs/วันศุกร์.mp4"], label: "วันศุกร์" },
+  { id: "สีน้ำตาล", match: ["สีน้ำตาล"], videos: ["signs/สีนํ้าตาล.mp4"], label: "สีน้ำตาล" },
+  { id: "สีเหลือง", match: ["สีเหลือง"], videos: ["signs/สีเหลือง.mp4"], label: "สีเหลือง" },
+  { id: "หงุดหงิด", match: ["หงุดหงิด"], videos: ["signs/หงุดหงิด(1).mp4", "signs/หงุดหงิด.mp4"], label: "หงุดหงิด" },
+  { id: "หน้าตาดี", match: ["หน้าตาดี"], videos: ["signs/หน้าตาดี(1).mp4", "signs/หน้าตาดี.mp4"], label: "หน้าตาดี" },
+  { id: "กระต่าย", match: ["กระต่าย"], videos: ["signs/กระต่าย.mp4"], label: "กระต่าย" },
+  { id: "กลางวัน", match: ["กลางวัน"], videos: ["signs/กลางวัน.mp4"], label: "กลางวัน" },
+  { id: "ก่อนนอน", match: ["ก่อนนอน"], videos: ["signs/ก่อนนอน.mp4"], label: "ก่อนนอน" },
+  { id: "กันยายน", match: ["กันยายน"], videos: ["signs/กันยายน.mp4"], label: "กันยายน" },
+  { id: "เจ๋งมาก", match: ["เจ๋งมาก"], videos: ["signs/เจ๋งมาก(1).mp4", "signs/เจ๋งมาก.mp4"], label: "เจ๋งมาก" },
+  { id: "ใจเย็นๆ", match: ["ใจเย็นๆ"], videos: ["signs/ใจเย็นๆ(1).mp4", "signs/ใจเย็นๆ.mp4"], label: "ใจเย็นๆ" },
+  { id: "ท้องฟ้า", match: ["ท้องฟ้า"], videos: ["signs/ท้องฟ้า.mp4"], label: "ท้องฟ้า" },
+  { id: "ทำดีมาก", match: ["ทำดีมาก"], videos: ["signs/ทำดีมาก.mp4", "signs/ทําดีมาก.mp4"], label: "ทำดีมาก" },
+  { id: "ทำยังไง", match: ["ทำยังไง"], videos: ["signs/ทำยังไง.mp4", "signs/ทํายังไง.mp4"], label: "ทำยังไง" },
+  { id: "น้องชาย", match: ["น้องชาย"], videos: ["signs/น้องชาย.mp4"], label: "น้องชาย" },
+  { id: "น้องสาว", match: ["น้องสาว"], videos: ["signs/น้องสาว.mp4"], label: "น้องสาว" },
+  { id: "บ๊ายบาย", match: ["บ๊ายบาย"], videos: ["signs/บ๊ายบาย.mp4"], label: "บ๊ายบาย" },
+  { id: "เปรี้ยว", match: ["เปรี้ยว"], videos: ["signs/เปรี้ยว.mp4"], label: "เปรี้ยว" },
+  { id: "ไปยังไง", match: ["ไปยังไง"], videos: ["signs/ไปยังไง.mp4"], label: "ไปยังไง" },
+  { id: "พลศึกษา", match: ["พลศึกษา"], videos: ["signs/พลศึกษา.mp4"], label: "พลศึกษา" },
+  { id: "พี่น้อง", match: ["พี่น้อง"], videos: ["signs/พี่น้อง.mp4"], label: "พี่น้อง" },
+  { id: "ภาษาไทย", match: ["ภาษาไทย"], videos: ["signs/ภาษาไทย.mp4"], label: "ภาษาไทย" },
+  { id: "ภาษามือ", match: ["ภาษามือ"], videos: ["signs/ภาษามือ.mp4"], label: "ภาษามือ" },
+  { id: "ไม่ง่าย", match: ["ไม่ง่าย"], videos: ["signs/ไม่ง่าย.mp4"], label: "ไม่ง่าย" },
+  { id: "ไม่สบาย", match: ["ไม่สบาย"], videos: ["signs/ไม่สบาย.mp4"], label: "ไม่สบาย" },
+  { id: "ยาแก้ไอ", match: ["ยาแก้ไอ"], videos: ["signs/ยาแก้ไอ.mp4"], label: "ยาแก้ไอ" },
+  { id: "ร้องไห้", match: ["ร้องไห้"], videos: ["signs/ร้องไห้(1).mp4", "signs/ร้องไห้.mp4"], label: "ร้องไห้" },
+  { id: "สัปดาห์", match: ["สัปดาห์"], videos: ["signs/สัปดาห์.mp4"], label: "สัปดาห์" },
+  { id: "สีเขียว", match: ["สีเขียว"], videos: ["signs/สีเขียว.mp4"], label: "สีเขียว" },
+  { id: "เสียดาย", match: ["เสียดาย"], videos: ["signs/เสียดาย(1).mp4", "signs/เสียดาย.mp4"], label: "เสียดาย" },
+  { id: "เหนื่อย", match: ["เหนื่อย"], videos: ["signs/เหนื่อย.mp4"], label: "เหนื่อย" },
+  { id: "อยู่ไหน", match: ["อยู่ไหน"], videos: ["signs/อยู่ไหน.mp4"], label: "อยู่ไหน" },
+  { id: "ขอบคุณ", match: ["ขอบคุณ"], videos: ["signs/ขอบคุณ.mp4"], label: "ขอบคุณ" },
+  { id: "เข้าใจ", match: ["เข้าใจ"], videos: ["signs/เข้าใจ.mp4"], label: "เข้าใจ" },
+  { id: "คิดถึง", match: ["คิดถึง"], videos: ["signs/คิดถึง(1).mp4", "signs/คิดถึง.mp4"], label: "คิดถึง" },
+  { id: "เครียด", match: ["เครียด"], videos: ["signs/เครียด(1).mp4", "signs/เครียด.mp4"], label: "เครียด" },
+  { id: "ชื่นชม", match: ["ชื่นชม"], videos: ["signs/ชื่นชม(1).mp4", "signs/ชื่นชม.mp4"], label: "ชื่นชม" },
+  { id: "ทำอะไร", match: ["ทำอะไร"], videos: ["signs/ทำอะไร(1).mp4", "signs/ทำอะไร.mp4"], label: "ทำอะไร" },
+  { id: "ที่ไหน", match: ["ที่ไหน"], videos: ["signs/ที่ไหน(1).mp4", "signs/ที่ไหน.mp4"], label: "ที่ไหน" },
+  { id: "น่ารัก", match: ["น่ารัก"], videos: ["signs/น่ารัก(1).mp4", "signs/น่ารัก.mp4"], label: "น่ารัก" },
+  { id: "ปรบมือ", match: ["ปรบมือ"], videos: ["signs/ปรบมือ(1).mp4", "signs/ปรบมือ.mp4"], label: "ปรบมือ" },
+  { id: "ประกัน", match: ["ประกัน"], videos: ["signs/ประกัน.mp4"], label: "ประกัน" },
+  { id: "พี่ชาย", match: ["พี่ชาย"], videos: ["signs/พี่ชาย.mp4"], label: "พี่ชาย" },
+  { id: "ฟ้าผ่า", match: ["ฟ้าผ่า"], videos: ["signs/ฟ้าผ่า.mp4"], label: "ฟ้าผ่า" },
+  { id: "ฟ้าแลบ", match: ["ฟ้าแลบ"], videos: ["signs/ฟ้าแลบ.mp4"], label: "ฟ้าแลบ" },
+  { id: "ภูมิใจ", match: ["ภูมิใจ"], videos: ["signs/ภูมิใจ(1).mp4", "signs/ภูมิใจ.mp4"], label: "ภูมิใจ" },
+  { id: "มีอะไร", match: ["มีอะไร"], videos: ["signs/มีอะไร(1).mp4", "signs/มีอะไร.mp4"], label: "มีอะไร" },
+  { id: "ไม่ชอบ", match: ["ไม่ชอบ"], videos: ["signs/ไม่ชอบ(1).mp4", "signs/ไม่ชอบ.mp4"], label: "ไม่ชอบ" },
+  { id: "ไม่ยาก", match: ["ไม่ยาก"], videos: ["signs/ไม่ยาก.mp4"], label: "ไม่ยาก" },
+  { id: "ไม่รู้", match: ["ไม่รู้"], videos: ["signs/ไม่รู้.mp4"], label: "ไม่รู้" },
+  { id: "ไม่ลืม", match: ["ไม่ลืม"], videos: ["signs/ไม่ลืม.mp4"], label: "ไม่ลืม" },
+  { id: "เยี่ยม", match: ["เยี่ยม"], videos: ["signs/เยี่ยม(1).mp4", "signs/เยี่ยม.mp4"], label: "เยี่ยม" },
+  { id: "วันนี้", match: ["วันนี้"], videos: ["signs/วันนี้.mp4"], label: "วันนี้" },
+  { id: "สวัสดี", match: ["สวัสดี"], videos: ["signs/สวัสดี.mp4"], label: "สวัสดี" },
+  { id: "สีชมพู", match: ["สีชมพู"], videos: ["signs/สีชมพู.mp4"], label: "สีชมพู" },
+  { id: "สีม่วง", match: ["สีม่วง"], videos: ["signs/สีม่วง.mp4"], label: "สีม่วง" },
+  { id: "สุดยอด", match: ["สุดยอด"], videos: ["signs/สุดยอด(1).mp4", "signs/สุดยอด.mp4"], label: "สุดยอด" },
+  { id: "เสียใจ", match: ["เสียใจ"], videos: ["signs/เสียใจ(1).mp4", "signs/เสียใจ.mp4"], label: "เสียใจ" },
+  { id: "แสงแดด", match: ["แสงแดด"], videos: ["signs/แสงแดด.mp4"], label: "แสงแดด" },
+  { id: "ขอโทษ", match: ["ขอโทษ"], videos: ["signs/ขอโทษ.mp4"], label: "ขอโทษ" },
+  { id: "เบื่อ", match: ["เบื่อ"], videos: ["signs/เบื่อ(1).mp4", "signs/เบื่อ.mp4"], label: "เบื่อ" },
+  { id: "มะรืน", match: ["มะรืน"], videos: ["signs/มะรืน.mp4"], label: "มะรืน" },
+  { id: "มีไหน", match: ["มีไหน"], videos: ["signs/มีไหน.mp4"], label: "มีไหน" },
+  { id: "มีไหม", match: ["มีไหม"], videos: ["signs/มีไหม.mp4"], label: "มีไหม" },
+  { id: "ไม่มี", match: ["ไม่มี"], videos: ["signs/ไม่มี.mp4"], label: "ไม่มี" },
+  { id: "รำคาญ", match: ["รำคาญ"], videos: ["signs/รำคาญ.mp4", "signs/รําคาญ.mp4"], label: "รำคาญ" },
+  { id: "ลำบาก", match: ["ลำบาก"], videos: ["signs/ลําบาก.mp4"], label: "ลำบาก" },
+  { id: "ศิลปะ", match: ["ศิลปะ"], videos: ["signs/ศิลปะ.mp4"], label: "ศิลปะ" },
+  { id: "เศร้า", match: ["เศร้า"], videos: ["signs/เศร้า(1).mp4", "signs/เศร้า.mp4"], label: "เศร้า" },
+  { id: "สังคม", match: ["สังคม"], videos: ["signs/สังคม.mp4"], label: "สังคม" },
+  { id: "สีขาว", match: ["สีขาว"], videos: ["signs/สีขาว.mp4"], label: "สีขาว" },
+  { id: "สีแดง", match: ["สีแดง"], videos: ["signs/สีแดง.mp4"], label: "สีแดง" },
+  { id: "สีทอง", match: ["สีทอง"], videos: ["signs/สีทอง.mp4"], label: "สีทอง" },
+  { id: "สีเทา", match: ["สีเทา"], videos: ["signs/สีเทา.mp4"], label: "สีเทา" },
+  { id: "สีฟ้า", match: ["สีฟ้า"], videos: ["signs/สีฟ้า.mp4"], label: "สีฟ้า" },
+  { id: "สีส้ม", match: ["สีส้ม"], videos: ["signs/สีส้ม.mp4"], label: "สีส้ม" },
+  { id: "อร่อย", match: ["อร่อย"], videos: ["signs/อร่อย.mp4"], label: "อร่อย" },
+  { id: "กวาง", match: ["กวาง"], videos: ["signs/กวาง.mp4"], label: "กวาง" },
+  { id: "เก่ง", match: ["เก่ง"], videos: ["signs/เก่ง(1).mp4", "signs/เก่ง.mp4"], label: "เก่ง" },
+  { id: "โกรธ", match: ["โกรธ"], videos: ["signs/โกรธ(1).mp4", "signs/โกรธ.mp4"], label: "โกรธ" },
+  { id: "โกหก", match: ["โกหก"], videos: ["signs/โกหก(1).mp4", "signs/โกหก.mp4"], label: "โกหก" },
+  { id: "เขิน", match: ["เขิน"], videos: ["signs/เขิน(1).mp4", "signs/เขิน.mp4"], label: "เขิน" },
+  { id: "ควาย", match: ["ควาย"], videos: ["signs/ควาย.mp4"], label: "ควาย" },
+  { id: "เค็ม", match: ["เค็ม"], videos: ["signs/เค็ม.mp4"], label: "เค็ม" },
+  { id: "เคมี", match: ["เคมี"], videos: ["signs/เคมี.mp4"], label: "เคมี" },
+  { id: "ง่าย", match: ["ง่าย"], videos: ["signs/ง่าย.mp4"], label: "ง่าย" },
+  { id: "ใจฟู", match: ["ใจฟู"], videos: ["signs/ใจฟู(1).mp4", "signs/ใจฟู.mp4"], label: "ใจฟู" },
+  { id: "ดีใจ", match: ["ดีใจ"], videos: ["signs/ดีใจ(1).mp4", "signs/ดีใจ.mp4"], label: "ดีใจ" },
+  { id: "ทำไม", match: ["ทำไม"], videos: ["signs/ทำไม.mp4", "signs/ทําไม.mp4"], label: "ทำไม" },
+  { id: "บ่าย", match: ["บ่าย"], videos: ["signs/บ่าย.mp4"], label: "บ่าย" },
+  { id: "ป่วย", match: ["ป่วย"], videos: ["signs/ป่วย(1).mp4", "signs/ป่วย.mp4"], label: "ป่วย" },
+  { id: "เป็ด", match: ["เป็ด"], videos: ["signs/เป็ด.mp4"], label: "เป็ด" },
+  { id: "เผ็ด", match: ["เผ็ด"], videos: ["signs/เผ็ด.mp4"], label: "เผ็ด" },
+  { id: "ฝนตก", match: ["ฝนตก"], videos: ["signs/ฝนตก.mp4"], label: "ฝนตก" },
+  { id: "พายุ", match: ["พายุ"], videos: ["signs/พายุ.mp4"], label: "พายุ" },
+  { id: "ภาษี", match: ["ภาษี"], videos: ["signs/ภาษี.mp4"], label: "ภาษี" },
+  { id: "ยาดม", match: ["ยาดม"], videos: ["signs/ยาดม.mp4"], label: "ยาดม" },
+  { id: "เย็น", match: ["เย็น"], videos: ["signs/เย็น.mp4"], label: "เย็น" },
+  { id: "ร้อน", match: ["ร้อน"], videos: ["signs/ร้อน.mp4"], label: "ร้อน" },
+  { id: "สนใจ", match: ["สนใจ"], videos: ["signs/สนใจ(1).mp4", "signs/สนใจ.mp4"], label: "สนใจ" },
+  { id: "สนุก", match: ["สนุก"], videos: ["signs/สนุก(1).mp4", "signs/สนุก.mp4"], label: "สนุก" },
+  { id: "สีดำ", match: ["สีดำ"], videos: ["signs/สีดํา.mp4"], label: "สีดำ" },
+  { id: "สู้ๆ", match: ["สู้ๆ"], videos: ["signs/สู้ๆ(1).mp4", "signs/สู้ๆ.mp4"], label: "สู้ๆ" },
+  { id: "เสือ", match: ["เสือ"], videos: ["signs/เสือ.mp4"], label: "เสือ" },
+  { id: "หนาว", match: ["หนาว"], videos: ["signs/หนาว.mp4"], label: "หนาว" },
+  { id: "หมอก", match: ["หมอก"], videos: ["signs/หมอก.mp4"], label: "หมอก" },
+  { id: "หล่อ", match: ["หล่อ"], videos: ["signs/หล่อ(1).mp4", "signs/หล่อ.mp4"], label: "หล่อ" },
+  { id: "หวาน", match: ["หวาน"], videos: ["signs/หวาน.mp4"], label: "หวาน" },
+  { id: "ห่าน", match: ["ห่าน"], videos: ["signs/ห่าน.mp4"], label: "ห่าน" },
+  { id: "เหงา", match: ["เหงา"], videos: ["signs/เหงา.mp4"], label: "เหงา" },
+  { id: "อดทน", match: ["อดทน"], videos: ["signs/อดทน.mp4"], label: "อดทน" },
+  { id: "ไก่", match: ["ไก่"], videos: ["signs/ไก่.mp4"], label: "ไก่" },
+  { id: "ค่ำ", match: ["ค่ำ"], videos: ["signs/คํ่า.mp4"], label: "ค่ำ" },
+  { id: "ใคร", match: ["ใคร"], videos: ["signs/ใคร(1).mp4", "signs/ใคร.mp4"], label: "ใคร" },
+  { id: "จืด", match: ["จืด"], videos: ["signs/จืด.mp4"], label: "จืด" },
+  { id: "ชอบ", match: ["ชอบ"], videos: ["signs/ชอบ(1).mp4", "signs/ชอบ.mp4"], label: "ชอบ" },
+  { id: "ตลก", match: ["ตลก"], videos: ["signs/ตลก(1).mp4", "signs/ตลก.mp4"], label: "ตลก" },
+  { id: "เท่", match: ["เท่"], videos: ["signs/เท่(1).mp4", "signs/เท่.mp4"], label: "เท่" },
+  { id: "น้า", match: ["น้า"], videos: ["signs/น้า.mp4"], label: "น้า" },
+  { id: "ปลา", match: ["ปลา"], videos: ["signs/ปลา.mp4"], label: "ปลา" },
+  { id: "ป้า", match: ["ป้า"], videos: ["signs/ป้า.mp4"], label: "ป้า" },
+  { id: "ปู่", match: ["ปู่"], videos: ["signs/ปู่.mp4"], label: "ปู่" },
+  { id: "พ่อ", match: ["พ่อ"], videos: ["signs/พ่อ.mp4"], label: "พ่อ" },
+  { id: "ม้า", match: ["ม้า"], videos: ["signs/ม้า.mp4"], label: "ม้า" },
+  { id: "มืด", match: ["มืด"], videos: ["signs/มืด.mp4"], label: "มืด" },
+  { id: "เมฆ", match: ["เมฆ"], videos: ["signs/เมฆ.mp4"], label: "เมฆ" },
+  { id: "แม่", match: ["แม่"], videos: ["signs/แม่.mp4"], label: "แม่" },
+  { id: "แมว", match: ["แมว"], videos: ["signs/แมว.mp4"], label: "แมว" },
+  { id: "ย่า", match: ["ย่า"], videos: ["signs/ย่า.mp4"], label: "ย่า" },
+  { id: "ยาก", match: ["ยาก"], videos: ["signs/ยาก.mp4"], label: "ยาก" },
+  { id: "ยาย", match: ["ยาย"], videos: ["signs/ยาย.mp4"], label: "ยาย" },
+  { id: "รัก", match: ["รัก"], videos: ["signs/รัก(1).mp4", "signs/รัก.mp4"], label: "รัก" },
+  { id: "รู้", match: ["รู้"], videos: ["signs/รู้.mp4"], label: "รู้" },
+  { id: "ฤดู", match: ["ฤดู"], videos: ["signs/ฤดู.mp4"], label: "ฤดู" },
+  { id: "ลืม", match: ["ลืม"], videos: ["signs/ลืม.mp4"], label: "ลืม" },
+  { id: "ลุง", match: ["ลุง"], videos: ["signs/ลุง.mp4"], label: "ลุง" },
+  { id: "ลูก", match: ["ลูก"], videos: ["signs/ลูก.mp4"], label: "ลูก" },
+  { id: "วัว", match: ["วัว"], videos: ["signs/วัว.mp4"], label: "วัว" },
+  { id: "สงบ", match: ["สงบ"], videos: ["signs/สงบ(1).mp4", "signs/สงบ.mp4"], label: "สงบ" },
+  { id: "สวย", match: ["สวย"], videos: ["signs/สวย(1).mp4", "signs/สวย.mp4"], label: "สวย" },
+  { id: "หนู", match: ["หนู"], videos: ["signs/หนู.mp4"], label: "หนู" },
+  { id: "หมา", match: ["หมา"], videos: ["signs/หมา.mp4"], label: "หมา" },
+  { id: "หมู", match: ["หมู"], videos: ["signs/หมู.mp4"], label: "หมู" },
+  { id: "ให้", match: ["ให้"], videos: ["signs/ให้.mp4"], label: "ให้" },
+  { id: "ไหน", match: ["ไหน"], videos: ["signs/ไหน.mp4"], label: "ไหน" },
+  { id: "อาย", match: ["อาย"], videos: ["signs/อาย.mp4"], label: "อาย" },
+  { id: "กบ", match: ["กบ"], videos: ["signs/กบ.mp4"], label: "กบ" },
+  { id: "ขม", match: ["ขม"], videos: ["signs/ขม.mp4"], label: "ขม" },
+  { id: "มี", match: ["มี"], videos: ["signs/มี.mp4"], label: "มี" },
+  { id: "ลม", match: ["ลม"], videos: ["signs/ลม.mp4"], label: "ลม" },
+  { id: "สี", match: ["สี"], videos: ["signs/สี.mp4"], label: "สี" },
 ];

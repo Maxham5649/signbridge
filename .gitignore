@@ -2,11 +2,10 @@
 # (ดู VOSK_MODEL_URL ใน script.js) จึงไม่ต้อง deploy ไปด้วย
 vosk-model/
 
-# คลิปภาษามือ — ตั้งใจไม่ commit ลง git
-# ไฟล์ที่เข้า git history แล้วจะเอาออกให้หมดจริงไม่ได้ (blob ยังเข้าถึงได้ผ่าน
-# commit SHA เก่าแม้ force push ไปแล้ว) ส่วน GitHub Release asset ลบ/เปลี่ยน
-# ทีหลังได้จริง — ดู SIGN_VIDEO_FALLBACK_SRC ใน signVocab.js
-signs/*.mp4
+# คลิปภาษามือ — ไฟล์บีบอัดแล้วใน signs/*.mp4 (~27MB รวม 242 ไฟล์) เล็กพอ
+# commit ตรงลง repo ได้เลย ไม่ต้องพึ่ง GitHub Release asset แบบไฟล์รวมเดิม
+# ส่วนต้นฉบับคุณภาพเต็ม (2.4GB, HEVC) เก็บไว้อ้างอิงเฉย ๆ ไม่ deploy/commit
+signs/คลิปภาษามือ/
 
 # ไฟล์เปล่าที่ค้างอยู่
 video

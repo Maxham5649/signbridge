@@ -350,11 +350,29 @@ function renderSignToText(text) {
    แค่ทนตัวอักษรคลาดเคลื่อนได้บ้าง) คืนลิสต์ที่ตรง เรียงตามตำแหน่ง
    ========================================================== */
 
-function normalizeThai(s) {
-  return (s || '')
-    .replace(/[ัิ-ฺ็-๎]/g, '') // ตัดวรรณยุกต์/สระบน-ล่าง/การันต์
+// นิคหิต (ํ) + วรรณยุกต์ (ถ้ามี) + สระอา (า) แบบเก่า -> สระอำ (ำ) ตัวเดียว
+// มาตรฐาน เช่น "คํ่า" (ค+ํ+่+า) -> "ค่ำ" (ค+่+ำ) ต้องทำก่อนตัดวรรณยุกต์
+// ทิ้งด้านล่าง ไม่งั้น ํ ถูกตัดออกไปเฉย ๆ (นับเป็นวรรณยุกต์) เหลือ "คา"
+// ซึ่งไม่ตรงกับ "ค่ำ" ที่สะกดถูกอยู่แล้ว (เหลือ "คำ" หลัง normalize)
+function normalizeSignSpelling(s) {
+  return (s || '').replace(/ํ([่-๋]?)า/g, '$1ำ');
+}
+
+// ระดับ "แม่นสุด" — แก้แค่สะกดเก่า/ใหม่ + whitespace/case ไม่แตะวรรณยุกต์/
+// สระเลย ใช้เทียบ exact ก่อนเสมอ กันคำสั้นชนกับคำอื่นที่สะกด/ออกเสียงต่าง
+// กันจริง (เช่น "ม้า" ต้องไม่ตรงกับ "มาก" — วรรณยุกต์ต่างกันจริง)
+function normalizeExactThai(s) {
+  return normalizeSignSpelling(s || '')
     .replace(/\s+/g, '')
     .toLowerCase();
+}
+
+function normalizeThai(s) {
+  // ตัดวรรณยุกต์ (่-๋) + การันต์ (์) เพิ่ม — ใช้เฉพาะตอน "ทน" ความเพี้ยน
+  // ของ STT เท่านั้น (ดู fuzzyFind: exact ก่อนเสมอ, ระดับนี้เป็น fallback
+  // และบังคับคำยาว >=4 ตัวเท่านั้นถึงจะใช้ กันคำสั้นหลุดมาชนคำอื่นผิด ๆ)
+  return normalizeExactThai(s)
+    .replace(/[่-๋์]/g, '');
 }
 
 function levenshtein(a, b) {
@@ -372,17 +390,34 @@ function levenshtein(a, b) {
 }
 
 // คืนตำแหน่งที่เจอ (ประมาณ ๆ หลัง normalize) หรือ -1 ถ้าไม่เจอแม้แบบหลวม
-function fuzzyFind(haystack, needle, maxErrorRatio = 0.25) {
+// ratio ต่ำมากตั้งใจ (0.1) — คลัง 195 คำมีคู่คำที่ต่างกันแค่ 1 ตัวอักษร
+// แต่ความหมายคนละเรื่องเยอะ (เช่น "เป็ด"/"เผ็ด", "เที่ยงวัน"/"เที่ยงคืน")
+// เจอจริงตอนเทสว่า ratio 0.25 เดิมทำให้คำพวกนี้ fuzzy-ข้ามกันได้ ซึ่งเสี่ยง
+// โชว์ท่าผิดสื่อความหมายผิดกับคนหูหนวก
+function fuzzyFind(haystack, needle, maxErrorRatio = 0.1) {
+  // ชั้น 1: แม่นสุด (เก็บวรรณยุกต์ไว้) — ถ้าเจอตรงเป๊ะจบเลย ไม่ต้องเสี่ยง
+  // ไปทาง fuzzy ที่อาจชนคำอื่นผิด ๆ
+  const hExact = normalizeExactThai(haystack);
+  const nExact = normalizeExactThai(needle);
+  if (!nExact) return -1;
+  const exactIdx = hExact.indexOf(nExact);
+  if (exactIdx !== -1) return exactIdx;
+
+  // ชั้น 2: ทนวรรณยุกต์/การันต์เพี้ยนจาก STT — ลองอีกทีแบบตัดวรรณยุกต์ทิ้ง
   const h = normalizeThai(haystack);
   const n = normalizeThai(needle);
-  if (!n) return -1;
-  const exactIdx = h.indexOf(n);
-  if (exactIdx !== -1) return exactIdx;
-  // คำสั้นกว่านี้ (หลังตัดสระ/วรรณยุกต์) ยอมให้ fuzzy ไม่ได้เลย — ผิดแค่
+  const looseIdx = h.indexOf(n);
+  if (looseIdx !== -1 && n.length >= 4) return looseIdx;
+  // คำสั้นกว่านี้ (หลังตัดวรรณยุกต์) ยอมให้ fuzzy ไม่ได้เลย — ผิดแค่
   // 1 ตัวอักษรของคำ 2-3 ตัวคือคลาดเคลื่อน 30-50% เจอ false positive ง่ายมาก
-  // (เจอจริงตอนเทส: "หิว" ไปจับกับประโยคที่ไม่เกี่ยวข้องเลย)
+  // (เจอจริงตอนเทส: "หิว" ไปจับกับประโยคที่ไม่เกี่ยวข้องเลย, "ม้า"/"รู้"
+  // ไปจับ "มาก"/"ครับ" ทั้งที่สะกด/ออกเสียงคนละคำ)
   if (n.length < 4) return -1;
-  const maxErr = Math.max(1, Math.floor(n.length * maxErrorRatio));
+  // ไม่บังคับ tolerance ขั้นต่ำ 1 ตัวอักษรอีกต่อไป (จุดที่เคยพังจริง — คำ
+  // ที่ต่างกันแค่ 1 ตัวจะ "ผ่านได้เสมอ" ไม่ว่า ratio จะต่ำแค่ไหนถ้ามี min
+  // บังคับ) คำ <=9 ตัวจึงต้อง exact เป๊ะ (maxErr=0) มีแค่คำยาว 10+ ตัวที่
+  // เริ่มมี tolerance จริง
+  const maxErr = Math.floor(n.length * maxErrorRatio);
   for (let i = 0; i <= h.length - 1; i++) {
     for (let len = Math.max(1, n.length - maxErr); len <= n.length + maxErr && i + len <= h.length; len++) {
       if (levenshtein(h.substr(i, len), n) <= maxErr) return i;
@@ -391,10 +426,17 @@ function fuzzyFind(haystack, needle, maxErrorRatio = 0.25) {
   return -1;
 }
 
+// คำที่สั้นมาก (<=2 ตัวอักษรดิบ เช่น "มี" "สี" "กบ" "ขม" "ลม") การันตีไม่ได้
+// เลยว่าจะไม่ไปจับ substring กลางคำอื่นที่ไม่เกี่ยวข้อง เพราะภาษาไทยเขียน
+// ต่อเนื่องไม่มีช่องว่างคั่นคำ ตัดออกจาก auto-match ฝั่งพูด->ภาษามือไปก่อน
+// กันท่าโชว์ผิด (คลิปยังอยู่ใน SIGN_VOCAB เผื่อใช้ทางอื่นในอนาคต)
+const AUTO_MATCH_MIN_RAW_LEN = 3;
+
 function matchSignVocab(text) {
   if (!text || typeof SIGN_VOCAB === 'undefined') return [];
   const found = [];
   for (const entry of SIGN_VOCAB) {
+    if (entry.label.length < AUTO_MATCH_MIN_RAW_LEN) continue;
     let bestIndex = -1;
     let bestLen = 0;
     for (const phrase of entry.match) {
@@ -425,8 +467,7 @@ function matchSignVocab(text) {
 }
 
 let signVideoQueue = [];
-let signVideoLoadPromise = null; // cache: โหลด SIGN_VIDEO_SRC ครั้งเดียวพอ ไม่ต้องโหลดซ้ำทุกคำ
-let signVideoPlaying = false; // true ระหว่างกำลังเล่นคลิปช่วงใดช่วงหนึ่งอยู่จริง
+let signVideoPlaying = false; // true ระหว่างกำลังเล่นคลิปคำใดคำหนึ่งอยู่จริง
 
 function showSignAvatarFallback() {
   signVideoPlaying = false;
@@ -438,77 +479,54 @@ function showSignAvatarFallback() {
   avatarHandle = setTimeout(() => els.signAvatar.classList.remove('is-playing'), 2400);
 }
 
-// ลองโหลดคลิปรวมจาก url เดียว — resolve เมื่อได้ metadata, reject ถ้าโหลดไม่ขึ้น
-function tryLoadSignVideoFrom(url) {
-  return new Promise((resolve, reject) => {
-    const onReady = () => { cleanup(); resolve(url); };
-    const onError = () => { cleanup(); reject(new Error('โหลด ' + url + ' ไม่สำเร็จ')); };
-    const cleanup = () => {
-      els.signVideo.removeEventListener('loadedmetadata', onReady);
-      els.signVideo.removeEventListener('error', onError);
-    };
-    els.signVideo.addEventListener('loadedmetadata', onReady, { once: true });
-    els.signVideo.addEventListener('error', onError, { once: true });
-    els.signVideo.src = url;
-  });
+// แต่ละคำมีคลิปได้หลายไฟล์ (อัดไว้หลายเทค ดู signVocab.js) — สุ่มเลือก
+// เทคทุกครั้งที่พูดถึงคำนั้น ให้ท่าดูเป็นธรรมชาติขึ้น ไม่ซ้ำเป๊ะทุกรอบ
+function pickVideoForEntry(entry) {
+  const list = entry.videos;
+  if (!list || list.length === 0) return null;
+  return list[Math.floor(Math.random() * list.length)];
 }
 
-// โหลดไฟล์วิดีโอรวมครั้งเดียว แคชผล ไม่ว่าจะเรียกซ้ำกี่ครั้งก็ไม่โหลดไฟล์ซ้ำ
-// ลองไฟล์ในเครื่องก่อน (signs/1.mp4 ตอน dev) ถ้าไม่มีค่อยตกไป GitHub Release
-// (ดู SIGN_VIDEO_FALLBACK_SRC ใน signVocab.js) — ถ้าไม่ได้ทั้งคู่ promise จะ
-// reject ให้ผู้เรียก fallback ไปอวาตาร์เอง
-function loadSignVideoSrc() {
-  if (signVideoLoadPromise) return signVideoLoadPromise;
-  signVideoLoadPromise = tryLoadSignVideoFrom(SIGN_VIDEO_SRC)
-    .catch(() => tryLoadSignVideoFrom(SIGN_VIDEO_FALLBACK_SRC))
-    .catch((err) => {
-      signVideoLoadPromise = null; // โหลดพังรอบนี้ อนุญาตให้ลองใหม่รอบหน้า (เผื่อไฟล์มาทีหลัง)
-      throw err;
-    });
-  return signVideoLoadPromise;
-}
-
-// เล่นท่าคำถัดไปในคิวจากคลิปรวมไฟล์เดียว: seek ไป start แล้วเล่นจน end
-// แล้วหยุด ต่อคำถัดไปในคิวเอง — ไม่มีไฟล์จริงหรือโหลดพัง ก็ fallback อวาตาร์
+// เล่นท่าคำถัดไปในคิว: แต่ละคำเป็นไฟล์คลิปของตัวเอง (ไม่ seek ในไฟล์รวม
+// เหมือนเดิมแล้ว) เล่นจนจบคลิป (ended) แล้วต่อคำถัดไปในคิวเอง — ไฟล์
+// โหลดพัง/ไม่มีไฟล์ ก็ข้ามไปคำถัดไป ไม่ค้าง
 async function playNextSignVideo() {
   const next = signVideoQueue.shift();
-  if (next) logStt('play', `${next.id} (${next.start}-${next.end}s)`);
   if (!next) {
     signVideoPlaying = false;
     showSignAvatarFallback();
     return;
   }
-  signVideoPlaying = true;
-
-  try {
-    await loadSignVideoSrc();
-  } catch (err) {
-    signVideoQueue = [];
-    signVideoPlaying = false;
-    showSignAvatarFallback();
+  const src = pickVideoForEntry(next);
+  logStt('play', `${next.id} -> ${src || '(ไม่มีคลิป)'}`);
+  if (!src) {
+    playNextSignVideo();
     return;
   }
+  signVideoPlaying = true;
 
   els.signAvatar.hidden = true;
   els.signAvatar.classList.remove('is-playing');
   els.signVideo.hidden = false;
 
   let advanced = false;
-  const onTimeUpdate = () => {
-    if (els.signVideo.currentTime >= next.end) {
-      els.signVideo.pause();
-      advanceOnce();
-    }
+  const onEnded = () => advanceOnce();
+  const onError = () => {
+    logStt('play-error', `${next.id}: โหลด ${src} ไม่สำเร็จ`);
+    advanceOnce();
   };
   const advanceOnce = () => {
     if (advanced) return;
     advanced = true;
-    els.signVideo.removeEventListener('timeupdate', onTimeUpdate);
+    els.signVideo.removeEventListener('ended', onEnded);
+    els.signVideo.removeEventListener('error', onError);
     playNextSignVideo();
   };
 
-  els.signVideo.addEventListener('timeupdate', onTimeUpdate);
-  els.signVideo.currentTime = next.start;
+  els.signVideo.addEventListener('ended', onEnded, { once: true });
+  els.signVideo.addEventListener('error', onError, { once: true });
+  els.signVideo.src = src;
+  els.signVideo.currentTime = 0;
   els.signVideo.play().catch(advanceOnce);
 }
 
@@ -985,8 +1003,7 @@ function handleLeftMeeting() {
   signVideoPlaying = false;
   els.signVideo.pause();
   els.signVideo.hidden = true;
-  // ไม่ removeAttribute('src') อีกต่อไป — SIGN_VIDEO_SRC เป็นไฟล์เดียว
-  // แคชไว้ใช้ข้ามคอลได้ ไม่ต้องโหลดซ้ำทุกครั้งที่เข้าห้องใหม่
+  els.signVideo.removeAttribute('src'); // แต่ละคำเป็นไฟล์แยกกัน ล้าง src ค้างไว้กันเล่นซ้ำผิดคำตอนเข้าห้องใหม่
   els.signAvatar.hidden = false;
   els.signAvatar.classList.remove('is-playing');
 
