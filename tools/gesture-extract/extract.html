@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>gesture extract</title></head>
+<body>
+<video id="signCamPreview" playsinline muted style="width:320px;height:240px"></video>
+<script src="../../signRecognition.js"></script>
+<script>
+/* ==========================================================
+   ดึงจุดมือ (landmarks) จากไฟล์วิดีโอคลิปเดียว — ใช้ landmarksToFrame()
+   เดียวกับตอน runtime จริงทุกอย่าง (โหลด signRecognition.js ตรงๆ ไม่ก็อป
+   logic แยก) เพื่อให้ reference ที่ได้เทียบ DTW กับท่าที่ผู้ใช้ทำสดได้ตรง
+
+   ขั้นตอน: seek ทีละ SAMPLE_INTERVAL_MS ตลอดความยาวคลิป -> detectForVideo
+   ทีละเฟรม -> landmarksToFrame() พร้อม carry-forward เหมือนโหมดจับสด
+   ========================================================== */
+// detectForVideo ต้องได้ timestamp เพิ่มขึ้นเสมอ "ตลอดชีวิต" ของ landmarker
+// ตัวเดียวกัน (ข้ามคลิปด้วย เพราะเราสร้าง landmarker ครั้งเดียวใช้ซ้ำหลาย
+// ไฟล์) เก็บเป็นตัวแปรนอกฟังก์ชัน ห้าม reset เป็น 0 ทุกครั้งที่เรียกใหม่
+let globalTimestamp = 0;
+
+// seek (ตั้ง currentTime ตรง ๆ) ใช้ไม่ได้ใน headless Chromium ตรงนี้ —
+// ทดสอบแล้วพบว่า currentTime ไม่ขยับหลัง seek เลย (ดู debug-frame.js) จึง
+// เปลี่ยนมาเล่นวิดีโอผ่านต่อเนื่องแล้วสุ่มตัวอย่างระหว่างเล่นแทน (วิธี
+// เดียวกับที่ signRecognition.js ใช้กับกล้องสดอยู่แล้ว)
+window.extractFromVideo = async function extractFromVideo(videoUrl) {
+  const video = document.getElementById('signCamPreview');
+  const landmarker = await loadHandLandmarker();
+
+  await new Promise((resolve, reject) => {
+    video.addEventListener('loadedmetadata', resolve, { once: true });
+    video.addEventListener('error', () => reject(new Error('load failed: ' + videoUrl)), { once: true });
+    video.src = videoUrl;
+  });
+
+  const carry = {};
+  const frames = [];
+  let handFrameCount = 0;
+  let sampledCount = 0;
+
+  await video.play();
+
+  await new Promise((resolve) => {
+    let timer = null;
+    const finish = () => { clearInterval(timer); resolve(); };
+    const onTick = () => {
+      if (video.ended || video.paused) { finish(); return; }
+      globalTimestamp += SAMPLE_INTERVAL_MS;
+      let result;
+      try {
+        result = landmarker.detectForVideo(video, globalTimestamp);
+      } catch (err) {
+        console.error('detectForVideo failed:', err.message);
+        return;
+      }
+      sampledCount++;
+      const count = (result.landmarks && result.landmarks.length) || 0;
+      if (count > 0) handFrameCount++;
+      if (count > 0 || Object.keys(carry).some((k) => carry[k])) {
+        frames.push(landmarksToFrame(result, carry));
+      }
+    };
+    timer = setInterval(onTick, SAMPLE_INTERVAL_MS);
+    video.addEventListener('ended', finish, { once: true });
+  });
+
+  return { frames, totalSampledFrames: sampledCount, handFrameCount, duration: video.duration };
+};
+window.__extractReady = true;
+</script>
+</body>
+</html>

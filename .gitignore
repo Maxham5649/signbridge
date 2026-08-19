@@ -14,6 +14,11 @@ video
 .claude/
 node_modules/
 
+# tools/gesture-extract: debug output ซ้ำกับ signGestureVocab.js ที่ commit
+# อยู่แล้ว ไม่ต้อง commit ไฟล์ raw/สแนปช็อตดีบักด้วย
+tools/gesture-extract/gesture-refs.json
+tools/gesture-extract/debug-frame.png
+
 # ผลลัพธ์จาก Bubblewrap (สร้างใหม่ได้ และมี keystore ห้าม commit เด็ดขาด)
 twa/
 *.keystore

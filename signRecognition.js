@@ -4,10 +4,11 @@
    โหมดกด-ค้าง: กดปุ่มค้างขณะทำท่า ปล่อยเมื่อจบท่า (ไม่ใช่ต่อเนื่อง
    อัตโนมัติ — การตัดแบ่งท่าจากวิดีโอต่อเนื่องเองเป็นปัญหายากเกินสโคป)
 
-   ไม่มีท่าอ้างอิงมาให้ล่วงหน้า — ต้อง "ฝึกสอน" ในแอปนี้เองก่อนถึงจะ
-   จดจำท่าได้ (อัดท่าตัวอย่าง 3-5 ครั้ง/คำ จากคนที่ใช้ภาษามือไทยได้จริง)
-   เก็บไว้ใน localStorage ของเครื่อง/เบราว์เซอร์นั้น ๆ — ย้ายเครื่องได้
-   ด้วย exportReferences()/importReferences()
+   ท่าอ้างอิงมาจากคลังกลาง SIGN_GESTURE_VOCAB (signGestureVocab.js) —
+   สกัดล่วงหน้าจากคลิปจริงชุดเดียวกับ Phase 1 ด้วย MediaPipE ผ่าน
+   tools/gesture-extract/ ทุกคนใช้ชุดเดียวกันทันที ไม่ต้องฝึกเอง
+   (ของเดิมเคยให้ผู้ใช้ฝึกเองผ่านกล้อง เก็บใน localStorage — ตัดออก
+   แล้วตามที่ตัดสินใจไว้ ดู tools/gesture-extract/README.md)
 
    กล้องตรงนี้เป็นสตรีมแยกจาก Jitsi เสมอ (Jitsi เป็น cross-origin
    iframe ดึงเฟรมจากมันไม่ได้) เปิด/ปิดอิสระจากกล้องของ Jitsi
@@ -18,11 +19,6 @@
 const HAND_LANDMARKER_BUNDLE_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.mjs';
 const HAND_LANDMARKER_WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm';
 const HAND_LANDMARKER_MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
-
-// v2: เปลี่ยนวิธี normalize (ดู landmarksToFrame) ท่าที่อัดด้วย v1 เทียบกับ
-// v2 ไม่ได้เลย จึงใช้คีย์ใหม่ ของเก่ายังอยู่ใน localStorage ไม่ได้ลบทิ้ง
-const SIGN_REF_STORAGE_KEY = 'signbridge-sign-references-v2';
-const SIGN_REF_LEGACY_KEY = 'signbridge-sign-references-v1';
 
 const SAMPLE_INTERVAL_MS = 80;  // จับ landmark ทุก ~80ms ระหว่างกดค้าง ไม่ใช่ทุกเฟรม กันเปลืองซีพียู/แบต
 const HAND_SLOTS = ['Left', 'Right']; // ช่องคงที่ ไม่อิงลำดับที่โมเดล detect เจอ
@@ -235,96 +231,18 @@ function dtwDistance(seqA, seqB) {
   return cost[n][m] / len;
 }
 
-/* ---------- เก็บ/โหลดท่าอ้างอิงจาก localStorage ---------- */
+/* ---------- ท่าอ้างอิง: มาจากคลังกลาง (pre-computed) เท่านั้น ---------- */
+// รูปแบบเดียวกับที่ localStorage เคยเก็บ (label -> [sequence, ...]) —
+// matchSignSequence/computeSpreads ใช้ต่อได้เลยไม่ต้องแก้ logic เทียบ
 function loadSignReferences() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(SIGN_REF_STORAGE_KEY) || '{}');
-    return raw && typeof raw === 'object' ? raw : {};
-  } catch (_) {
-    return {};
-  }
+  return (typeof SIGN_GESTURE_VOCAB !== 'undefined' && SIGN_GESTURE_VOCAB) ? SIGN_GESTURE_VOCAB : {};
 }
 
-function saveSignReferences(refs) {
-  try {
-    localStorage.setItem(SIGN_REF_STORAGE_KEY, JSON.stringify(refs));
-    spreadCache = null; // ข้อมูลฝึกเปลี่ยน ต้องคำนวณ spread ใหม่
-    return true;
-  } catch (err) {
-    console.error('บันทึกท่าอ้างอิงไม่สำเร็จ:', err);
-    return false;
-  }
-}
-
-function hasLegacyReferences() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(SIGN_REF_LEGACY_KEY) || '{}');
-    return Object.keys(raw || {}).length > 0;
-  } catch (_) {
-    return false;
-  }
-}
-
-function addSignReference(label, sequence) {
-  const refs = loadSignReferences();
-  if (!refs[label]) refs[label] = [];
-  refs[label].push(sequence);
-  saveSignReferences(refs);
-  return refs[label].length;
-}
-
-function removeSignLabel(label) {
-  const refs = loadSignReferences();
-  delete refs[label];
-  saveSignReferences(refs);
-}
-
-function getTrainedLabelCounts() {
+// คลังกลางคงที่ตลอดอายุหน้า (ไม่มีใครเขียนทับระหว่างใช้งาน) จึง cache
+// รายชื่อคำ + จำนวนตัวอย่างได้เลยโดยไม่ต้อง invalidate
+function getAvailableLabelCounts() {
   const refs = loadSignReferences();
   return Object.keys(refs).map((label) => ({ label, count: refs[label].length }));
-}
-
-/* ---------- ย้ายท่าที่ฝึกไว้ข้ามเครื่อง ---------- */
-function exportReferences() {
-  return JSON.stringify({
-    format: 'signbridge-signs',
-    version: 2,
-    exportedAt: new Date().toISOString(),
-    references: loadSignReferences(),
-  }, null, 2);
-}
-
-/* merge = true: รวมกับของเดิม (ตัวอย่างต่อท้าย) / false: เขียนทับทั้งหมด */
-function importReferences(json, { merge = true } = {}) {
-  let parsed;
-  try {
-    parsed = typeof json === 'string' ? JSON.parse(json) : json;
-  } catch (err) {
-    throw new Error('ไฟล์ไม่ใช่ JSON ที่อ่านได้');
-  }
-  if (!parsed || parsed.format !== 'signbridge-signs') {
-    throw new Error('ไม่ใช่ไฟล์ท่าภาษามือของ SignBridge');
-  }
-  if (parsed.version !== 2) {
-    throw new Error(`ไฟล์เป็นเวอร์ชัน ${parsed.version} แต่แอปนี้อ่านได้เฉพาะเวอร์ชัน 2`);
-  }
-  const incoming = parsed.references;
-  if (!incoming || typeof incoming !== 'object') throw new Error('ไฟล์ไม่มีข้อมูลท่า');
-
-  const refs = merge ? loadSignReferences() : {};
-  let labels = 0;
-  let samples = 0;
-  for (const label of Object.keys(incoming)) {
-    const seqs = incoming[label];
-    if (!Array.isArray(seqs) || seqs.length === 0) continue;
-    if (!refs[label]) refs[label] = [];
-    for (const seq of seqs) {
-      if (Array.isArray(seq) && seq.length > 0) { refs[label].push(seq); samples++; }
-    }
-    labels++;
-  }
-  if (!saveSignReferences(refs)) throw new Error('บันทึกลงเครื่องไม่สำเร็จ (localStorage เต็ม?)');
-  return { labels, samples };
 }
 
 /* ==========================================================
