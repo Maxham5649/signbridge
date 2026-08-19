@@ -745,6 +745,18 @@ button { font-family: inherit; }
   display: block;
 }
 
+/* เส้นโครงมือที่ MediaPipe เห็น — วาดทับ video พอดี mirror เหมือนกัน
+   (scaleX(-1)) ไม่งั้นเส้นจะสลับข้างกับมือจริงในภาพ */
+.sign-cam-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(-1);
+  pointer-events: none;
+}
+
 .sign-hand-badge {
   position: absolute;
   left: 8px;

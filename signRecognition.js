@@ -55,8 +55,12 @@ function setMatchConfig(patch) {
 }
 
 let handLandmarkerPromise = null;
+let handConnections = null; // HandLandmarker.HAND_CONNECTIONS — รู้ได้หลังโหลด bundle เท่านั้น
+let drawingUtils = null;
 let signCamStream = null;
 let signCamVideo = null; // <video id="signCamPreview"> จริงใน DOM — โชว์ preview ให้เห็นด้วย ไม่ใช่แค่ feed เข้าโมเดลเฉย ๆ
+let signCamOverlay = null; // <canvas id="signCamOverlay"> ซ้อนทับ video — วาดเส้นโครงมือให้เห็นขอบเขตที่ MediaPipe จับได้จริง
+let overlayCtx = null;
 let detectTimer = null;
 let detectTimestamp = 0; // ต้องเพิ่มขึ้นเสมอ ไม่งั้น detectForVideo โยน error
 let capturing = false;
@@ -85,13 +89,22 @@ function updateHandsCount(n) {
 function loadHandLandmarker() {
   if (handLandmarkerPromise) return handLandmarkerPromise;
   handLandmarkerPromise = (async () => {
-    const { FilesetResolver, HandLandmarker } = await import(HAND_LANDMARKER_BUNDLE_URL);
+    const { FilesetResolver, HandLandmarker, DrawingUtils } = await import(HAND_LANDMARKER_BUNDLE_URL);
+    handConnections = HandLandmarker.HAND_CONNECTIONS;
     const vision = await FilesetResolver.forVisionTasks(HAND_LANDMARKER_WASM_URL);
-    return HandLandmarker.createFromOptions(vision, {
+    const landmarker = await HandLandmarker.createFromOptions(vision, {
       baseOptions: { modelAssetPath: HAND_LANDMARKER_MODEL_URL },
       runningMode: 'VIDEO',
       numHands: 2,
     });
+    // DrawingUtils ต้องผูกกับ canvas context — สร้างตอนนี้เลย (ก่อนหน้านี้
+    // แน่ใจแล้วว่ามี HandLandmarker.DrawingUtils ให้ใช้จาก bundle เดียวกัน)
+    if (!overlayCtx) {
+      signCamOverlay = document.getElementById('signCamOverlay');
+      if (signCamOverlay) overlayCtx = signCamOverlay.getContext('2d');
+    }
+    if (overlayCtx) drawingUtils = new DrawingUtils(overlayCtx);
+    return landmarker;
   })().catch((err) => {
     handLandmarkerPromise = null;
     throw err;
@@ -109,6 +122,17 @@ async function ensureSignCamera() {
   signCamVideo.srcObject = signCamStream;
   signCamVideo.hidden = false;
   await signCamVideo.play();
+
+  // canvas วาดเส้นโครงมือต้องมีขนาด "จริง" เท่า video (videoWidth/videoHeight
+  // ที่กล้องให้มาจริง ไม่ใช่ขนาด CSS ที่ขอไว้ 320x240) ไม่งั้นพิกัดจุดที่
+  // normalize มา 0..1 จะวาดผิดตำแหน่งเมื่อ scale ไม่ตรงกับของจริง
+  signCamOverlay = document.getElementById('signCamOverlay');
+  if (signCamOverlay) {
+    signCamOverlay.width = signCamVideo.videoWidth || 320;
+    signCamOverlay.height = signCamVideo.videoHeight || 240;
+    signCamOverlay.hidden = false;
+    overlayCtx = signCamOverlay.getContext('2d');
+  }
   return signCamVideo;
 }
 
@@ -125,6 +149,8 @@ function stopSignCamera() {
     signCamVideo.hidden = true;
   }
   signCamVideo = null;
+  if (overlayCtx && signCamOverlay) overlayCtx.clearRect(0, 0, signCamOverlay.width, signCamOverlay.height);
+  if (signCamOverlay) signCamOverlay.hidden = true;
   updateHandsCount(0);
 }
 
@@ -342,6 +368,23 @@ function matchSignSequence(liveSeq) {
    detectForVideo จะไม่เรียงกัน (MediaPipe โยน error ทันที)
    ========================================================== */
 
+/* วาดเส้น+จุดโครงมือทับ preview — ให้เห็นด้วยตาว่า MediaPipe จับมือ
+   ตรงไหน/ชัดแค่ไหนจริง ๆ (ช่วยดีบักตอนจับท่าไม่ติด: มือเบลอ/นอกเฟรม/
+   มุมเอียงจนโมเดลไม่เห็นก็จะไม่มีเส้นขึ้นเลย เห็นได้ทันที) */
+function drawHandOverlay(result) {
+  if (!overlayCtx || !signCamOverlay || !drawingUtils) return;
+  overlayCtx.save();
+  overlayCtx.clearRect(0, 0, signCamOverlay.width, signCamOverlay.height);
+  const lms = (result && result.landmarks) || [];
+  for (const landmarks of lms) {
+    if (handConnections) {
+      drawingUtils.drawConnectors(landmarks, handConnections, { color: '#2ecc71', lineWidth: 3 });
+    }
+    drawingUtils.drawLandmarks(landmarks, { color: '#ff5c5c', lineWidth: 1, radius: 3 });
+  }
+  overlayCtx.restore();
+}
+
 async function startDetectionLoop() {
   if (detectTimer) return;
   await ensureSignCamera();
@@ -360,6 +403,7 @@ async function startDetectionLoop() {
     }
     const count = (result.landmarks && result.landmarks.length) || 0;
     updateHandsCount(count);
+    drawHandOverlay(result);
     if (capturing) {
       if (count > 0 || Object.keys(carry).some((k) => carry[k])) {
         captureBuffer.push(landmarksToFrame(result, carry));
