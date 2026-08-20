@@ -1,5 +1,5 @@
 /* ==========================================================
-   SignBridge — วิดีโอคอลไทย: ผู้หูหนวก ⇄ ผู้ได้ยิน
+   Kluenjai — วิดีโอคอลไทย: ผู้หูหนวก ⇄ ผู้ได้ยิน
    ----------------------------------------------------------
    ส่วนที่ทำงานจริงแล้ว:
      • วิดีโอคอลข้ามอุปกรณ์ผ่าน Jitsi Meet (meet.jit.si, IFrame API)
@@ -17,7 +17,7 @@
    TWA ดึงหน้าเว็บสด ไม่ได้ฝังโค้ดไว้ในตัว APK เวลาไล่บั๊กจึงต้องมีอะไร
    ยืนยันได้ว่าเครื่องนั้นได้ของใหม่แล้วจริง ไม่ใช่ค้างของเก่าอยู่
    *** แก้เลขนี้ทุกครั้งที่ push โค้ดขึ้น production *** */
-const APP_BUILD = 'b14';
+const APP_BUILD = 'b15';
 
 const $ = (id) => document.getElementById(id);
 
@@ -1140,7 +1140,7 @@ function joinRoom(rawInput, role) {
       parentNode: els.jitsiContainer,
       width: '100%',
       height: '100%',
-      userInfo: { displayName: `${roleLabel(role)} · SignBridge` },
+      userInfo: { displayName: `${roleLabel(role)} · Kluenjai` },
       configOverwrite: {
         p2p: { enabled: false }, // ต้องปิด P2P ไม่งั้น sendEndpointTextMessage จะส่งไม่ถึงตอนคุยกัน 2 คน
         disableDeepLinking: true,

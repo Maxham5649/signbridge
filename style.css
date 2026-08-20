@@ -64,7 +64,8 @@ button { font-family: inherit; }
 .brand-mark {
   width: 30px; height: 30px;
   border-radius: 9px;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
+  /* ไอคอนเป็นภาพเต็มผืน มุมมนมาจาก border-radius ตรงนี้ ไม่ได้อยู่ในไฟล์รูป */
+  background: url('icons/icon-192.png') center / cover no-repeat;
 }
 
 .brand-name {

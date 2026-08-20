@@ -1,4 +1,4 @@
-# สร้าง APK ของ SignBridge ด้วย Bubblewrap (TWA)
+# สร้าง APK ของ Kluenjai ด้วย Bubblewrap (TWA)
 
 TWA = Trusted Web Activity — APK ที่เปิดเว็บของเราด้วย Chrome engine จริงแบบเต็มจอ
 ไม่มีแถบ URL ทำให้ **Web Speech API / Jitsi / MediaPipe ทำงานได้ 100% เหมือนเปิดในเบราว์เซอร์**
@@ -128,7 +128,7 @@ npx --yes @bubblewrap/cli@latest updateConfig --jdkPath "C:\Users\user\.bubblewr
 | Package ID | `app.signbridge.twa` |
 | Host | `maxham5649.github.io` |
 | Launch URL | `/signbridge/` |
-| Launcher name | `SignBridge` |
+| Launcher name | `Kluenjai` |
 | Theme color | `#1C5DFA` |
 | minSdk / targetSdk | 21 / 35 |
 

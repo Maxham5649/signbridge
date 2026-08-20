@@ -23,3 +23,6 @@ tools/gesture-extract/debug-frame.png
 twa/
 *.keystore
 *.jks
+
+# โฟลเดอร์ทดลองส่วนตัว ไม่เกี่ยวกับแอป
+scratch/

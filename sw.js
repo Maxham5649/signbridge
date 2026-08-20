@@ -1,5 +1,5 @@
 /* ==========================================================
-   SignBridge — Service Worker
+   Kluenjai — Service Worker
    หน้าที่: ทำให้เปิดแอพได้เร็ว/ออฟไลน์ได้บางส่วน และทำให้ผ่านเกณฑ์
    PWA ที่ Bubblewrap ใช้ห่อเป็น APK (TWA)
 
@@ -12,7 +12,7 @@
      ตอน dev ที่ยังมี signs/1.mp4 อยู่ในเครื่อง
    ========================================================== */
 
-const VERSION = 'signbridge-v14';
+const VERSION = 'kluenjai-v15';
 const SHELL_CACHE = `${VERSION}-shell`;
 const MEDIA_CACHE = `${VERSION}-media`;
 
